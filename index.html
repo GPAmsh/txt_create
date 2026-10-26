@@ -375,17 +375,17 @@ const varByLabel = label => state.vars.find(v => v.label.trim() === label);
 const rawOf = v => (state.values[v.key] ?? '').toString();
 // '-'처럼 보이는 문자(시트·한글 입력의 –, −, －, ㅡ 등)와 보이지 않는 공백도 '-'로 인정
 const isDash = s => /^[-‐‑‒–—―−－﹣ㅡ]$/.test(s.replace(/[\s​-‍⁠﻿]/g, ''));
-// 이관여부 체크 시 이 이름의 변수들(과 숫자인 데일리캡)에서 이관 수량(1~2000)만큼 뺌
+// 이관여부 체크 시 이 이름의 변수들에서 이관 수량(1~2000)만큼 뺌 (데일리캡은 capToOrderQty 참고)
 const TRANSFER_QTY = ['주문수량', '총주문수량', '진행건수', '세팅수량'];
 const validTransferN = s => /^\d+$/.test(String(s ?? '').trim()) && +s >= 1 && +s <= 2000;
 function transferN() {
   const v = state.vars.find(x => x.special);
   return v && state.values[v.key] && validTransferN(state.transferN) ? +state.transferN : 0;
 }
-// 데일리캡도 이관 수량만큼 뺄지: 주문수량의 절반 이상이면 뺌, 주문수량이 숫자가 아니면 빼지 않음
-function dailyCapFollows(cap) {
-  const q = varByLabel('주문수량'), qty = q ? rawOf(q).trim() : '';
-  return /^\d+$/.test(qty) && +qty / 2 <= cap;
+// 이관 체크 시 숫자인 데일리캡이 이관 후 주문수량보다 크면 주문수량으로 맞춤, 아니면 그대로 (주문수량이 숫자가 아니면 그대로)
+function capToOrderQty(cap) {
+  const q = varByLabel('주문수량'), qty = q ? valueOf(q).trim() : '';
+  return /^-?\d+$/.test(qty) && cap > +qty ? qty : String(cap);
 }
 // 문구에 실제로 들어갈 값
 function valueOf(v) {
@@ -393,10 +393,14 @@ function valueOf(v) {
   let val = rawOf(v);
   // 데일리캡이 '건'으로 끝나면 마지막 '건'은 뺌 (예: 2일1건 → 2일1, 양식의 '(e)건'과 겹치지 않게)
   if (v.label.trim() === DAILY_CAP) val = val.trim().replace(/건$/, '');
-  // 숫자인 데일리캡은 주문수량/2 <= 데일리캡일 때만 같이 뺌 (이관 전 값으로 비교, '-'이면 아래에서 이미 뺀 값을 가져옴)
+  // 주문수량 등은 이관 수량만큼 뺌. 숫자인 데일리캡은 빼지 않고, 이관 후 주문수량보다 클 때만 주문수량으로 맞춤
+  // ('-'이면 아래에서 이관 후 주문수량을 가져옴)
   if (TRANSFER_QTY.includes(v.label.trim()) || v.label.trim() === DAILY_CAP) {
     const n = transferN();
-    if (/^\d+$/.test(val.trim())) return n && (v.label.trim() !== DAILY_CAP || dailyCapFollows(+val.trim())) ? String(+val.trim() - n) : val;
+    if (/^\d+$/.test(val.trim())) {
+      if (!n) return val;
+      return v.label.trim() === DAILY_CAP ? capToOrderQty(+val.trim()) : String(+val.trim() - n);
+    }
   }
   if (v.label.trim() !== DAILY_CAP || !isDash(val)) return val;
   for (const label of DAILY_CAP_FALLBACK) {
