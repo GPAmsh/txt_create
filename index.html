@@ -1,0 +1,962 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<!-- 보안: 외부 스크립트·이미지·폼 전송을 막고, 데이터 통신은 공휴일 API(date.nager.at)만 허용 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src https://date.nager.at; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>문구 생성기</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #fff; --text: #1d2129; --muted: #6b7280; --line: #e3e6ea;
+    --accent: #2563eb; --accent-soft: #e8efff; --danger: #dc2626; --danger-soft: #fdecec; --ok: #16a34a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15171b; --panel: #1e2126; --text: #e6e8eb; --muted: #9aa1ab; --line: #2f343b;
+      --accent: #6b9bff; --accent-soft: #23324f; --danger: #f87171; --danger-soft: #3b2224; --ok: #4ade80;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 "Malgun Gothic", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; }
+  nav { display: flex; gap: 4px; overflow-x: auto; }
+  nav button { white-space: nowrap; border: 0; background: none; color: var(--muted); padding: 8px 14px; border-radius: 6px; cursor: pointer; font: inherit; }
+  nav button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .tab { display: none; }
+  .tab.on { display: block; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .card h2 { font-size: 15px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  label.field { display: block; margin-bottom: 10px; }
+  label.field > span { display: flex; gap: 6px; align-items: baseline; font-size: 13px; color: var(--muted); margin-bottom: 3px; }
+  label.field > span b { color: var(--text); }
+  input, select, textarea { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
+  textarea { resize: vertical; min-height: 220px; font-family: inherit; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .bad { border-color: var(--danger) !important; background: var(--danger-soft) !important; }
+  .err { color: var(--danger); font-size: 12px; }
+  .unused { opacity: .45; }
+  button.btn { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 7px 14px; border-radius: 6px; cursor: pointer; }
+  button.btn:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: var(--danger); }
+  button:disabled { opacity: .4; cursor: default; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .spacer { flex: 1; }
+  .output { white-space: pre-wrap; word-break: break-all; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 12px; min-height: 220px; }
+  .output .url { color: var(--accent); text-decoration: underline dotted; cursor: pointer; }
+  .output mark { background: var(--danger-soft); color: var(--danger); border-radius: 3px; padding: 0 2px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .chip { font: inherit; font-size: 12px; border: 1px solid var(--line); background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+  .slots { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin-bottom: 16px; }
+  @media (max-width: 800px) { .slots { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .slot { text-align: left; font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 6px; padding: 6px 10px; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .slot small { color: var(--muted); margin-right: 4px; }
+  .slot.empty { color: var(--muted); }
+  .slot.on { border-color: var(--accent); background: var(--accent-soft); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  td.key { font-weight: 700; width: 50px; }
+  td input[type=number] { width: 90px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 16px; border-radius: 6px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.on { opacity: 1; }
+  .dirty { color: var(--danger); font-size: 12px; font-weight: 400; }
+  textarea.paste-in { min-height: 64px; font-family: Consolas, monospace; font-size: 12px; white-space: pre; overflow-x: auto; }
+  .slot-sel { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 12px; }
+  @media (max-width: 800px) { .slot-sel { grid-template-columns: 1fr 1fr; } }
+  .slot-sel select { font-size: 12px; padding: 5px; }
+  .scrollbox { max-height: 65vh; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px; }
+  .result h3 { font-size: 13px; margin: 0 0 6px; display: flex; align-items: center; gap: 8px; }
+  .result .output { min-height: 0; }
+  td.val { font-size: 12px; word-break: break-all; }
+  td select { font-size: 12px; padding: 4px; }
+  .date-grid { display: grid; grid-template-columns: 360px 1fr; gap: 20px; }
+  @media (max-width: 800px) { .date-grid { grid-template-columns: 1fr; } }
+  .date-grid .card { margin-bottom: 20px; }
+  table.prev td { border-bottom: 1px solid var(--line); }
+  input[type=checkbox] { width: auto; margin: 0 6px 0 0; }
+  .pair { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; align-items: center; }
+  .checks label { display: flex; align-items: center; padding: 4px 0; cursor: pointer; }
+  textarea.out { font-family: Consolas, "D2Coding", monospace; min-height: 420px; white-space: pre; tab-size: 16; resize: vertical; }
+  textarea.hol { font-family: Consolas, monospace; font-size: 12px; min-height: 220px; }
+  table.prev { border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+  table.prev td { border: 1px solid var(--line); padding: 2px 10px; white-space: nowrap; }
+  table.prev td.n { color: var(--muted); text-align: right; }
+  details summary { cursor: pointer; font-weight: 600; }
+  label.tchk { display: flex; align-items: center; font-size: 13px; font-weight: 400; cursor: pointer; white-space: nowrap; }
+  input.transferN { width: 80px; padding: 3px 6px; font-size: 13px; font-weight: 400; }
+</style>
+</head>
+<body>
+<header>
+  <h1>문구 생성기</h1>
+  <nav>
+    <button data-tab="make" class="on">문구 만들기</button>
+    <button data-tab="paste">시트 붙여넣기</button>
+    <button data-tab="date">날짜 목록</button>
+    <button data-tab="tpl">양식 편집</button>
+    <button data-tab="vars">변수 설정</button>
+  </nav>
+</header>
+
+<main>
+  <!-- 문구 만들기 -->
+  <section class="tab on" id="tab-make">
+    <div class="grid">
+      <div class="card">
+        <h2>양식 선택</h2>
+        <label class="field"><select id="makeSlot"></select></label>
+        <h2>변수 입력</h2>
+        <div id="makeInputs"></div>
+        <div class="row"><button class="btn" id="clearValues">입력값 모두 지우기</button></div>
+      </div>
+      <div class="card">
+        <h2>결과 <label class="tchk"><input type="checkbox" class="transfer">이관여부</label><input class="transferN" inputmode="numeric" placeholder="1~2000" title="이관여부 체크 시 주문수량·총주문수량·진행건수·세팅수량에서 뺄 수"><span class="spacer"></span><button class="btn primary" id="copyOut">복사</button></h2>
+        <div class="output" id="output"></div>
+        <div class="err" id="outErr"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 시트 붙여넣기 -->
+  <section class="tab" id="tab-paste">
+    <div class="card" style="margin-bottom:20px">
+      <h2>구글 시트 행 붙여넣기</h2>
+      <textarea id="pasteIn" class="paste-in" placeholder="구글 시트에서 행 하나를 선택해 복사(Ctrl+C)한 뒤 여기에 붙여넣기(Ctrl+V)"></textarea>
+      <div class="row" style="margin-top:6px">
+        <span class="muted" id="pasteInfo"></span><span class="spacer"></span>
+        <button class="btn" id="pasteClear">지우기</button>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <h2>열 → 변수 연결</h2>
+        <table>
+          <thead><tr><th>변수</th><th>가져올 열</th><th>들어간 값</th></tr></thead>
+          <tbody id="mapRows"></tbody>
+        </table>
+        <p class="muted">한 번 연결해 두면 저장됩니다. '안 씀'인 변수는 기존 입력값을 그대로 씁니다.</p>
+      </div>
+      <div class="card">
+        <h2>표시할 양식 (최대 5개) <label class="tchk"><input type="checkbox" class="transfer">이관여부</label><input class="transferN" inputmode="numeric" placeholder="1~2000" title="이관여부 체크 시 주문수량·총주문수량·진행건수·세팅수량에서 뺄 수"></h2>
+        <div class="slot-sel" id="pasteSlotSel"></div>
+        <div class="scrollbox" id="pasteOut"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 날짜 목록 -->
+  <section class="tab" id="tab-date">
+    <div class="date-grid">
+  <div>
+    <div class="card">
+      <h2>설정</h2>
+      <label class="field"><span>시작 날짜</span><input type="date" id="dl-start"><div class="err" id="dl-startWarn"></div></label>
+      <label class="field"><span>행 개수</span><input type="number" id="dl-rows" min="1" max="5000"></label>
+      <label class="field"><span>반복 횟수 (최소 ~ 최대, 같으면 고정)</span>
+        <div class="pair"><input type="number" id="dl-repMin" min="1" max="100"><span>~</span><input type="number" id="dl-repMax" min="1" max="100"></div>
+      </label>
+      <label class="field"><span>건너뛰기 (며칠 간격으로 이어서, 0이면 같은 날짜 반복)</span><input type="number" id="dl-skip" min="0" max="100"></label>
+      <label class="field"><span>날짜 형식</span>
+        <select id="dl-fmt">
+          <option value="dot">2026. 1. 5</option>
+          <option value="dot0">2026. 01. 05</option>
+          <option value="dash">2026-01-05</option>
+          <option value="slash">2026/01/05</option>
+        </select>
+      </label>
+      <div class="checks">
+        <span class="muted">제외할 날</span>
+        <label><input type="checkbox" id="dl-exSat">토요일 제외</label>
+        <label><input type="checkbox" id="dl-exSun">일요일 제외</label>
+        <label><input type="checkbox" id="dl-exHol">공휴일 제외</label>
+      </div>
+      <div class="err" id="dl-err"></div>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>공휴일 목록 편집</summary>
+        <p class="muted">한 줄에 하나씩 <b>YYYY-MM-DD 이름</b>. 회사 휴무일 등을 직접 추가해도 됩니다. 기본 목록은 2025~2027년(대체·선거일 포함)입니다.</p>
+        <textarea class="hol" id="dl-hol"></textarea>
+        <div class="row" style="margin-top:8px">
+          <button class="btn" id="dl-holReset">기본값으로</button>
+          <button class="btn" id="dl-holFetch">인터넷에서 추가</button>
+        </div>
+        <div class="muted" id="dl-holInfo"></div>
+      </details>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>결과 <span class="muted" id="dl-summary"></span><span class="spacer"></span>
+      <button class="btn" id="dl-reroll">다시 섞기</button>
+      <button class="btn primary" id="dl-copy">복사</button>
+    </h2>
+    <textarea class="out" id="dl-out" readonly></textarea>
+    <p class="muted">복사한 뒤 구글 시트 칸 하나를 클릭하고 붙여넣으면 열·행에 맞게 들어갑니다.</p>
+    <div id="dl-preview"></div>
+  </div>
+    </div>
+  </section>
+
+  <!-- 양식 편집 -->
+  <section class="tab" id="tab-tpl">
+    <div class="card">
+      <h2>저장 슬롯 (1~18)</h2>
+      <div class="slots" id="slotList"></div>
+      <div class="grid">
+        <div>
+          <label class="field"><span>슬롯 <b id="tplNo"></b> 이름</span><input id="tplName" placeholder="예: 주문 준비 안내"></label>
+          <div class="muted" style="margin-bottom:4px">클릭하면 커서 위치에 변수가 들어갑니다</div>
+          <div class="chips" id="tplChips"></div>
+          <label class="field"><textarea id="tplBody" placeholder="안녕하세요!~ 주문하신 (c) 준비되었습니다.&#10;총주문수량: (d)"></textarea></label>
+          <div class="row">
+            <button class="btn primary" id="tplSave">저장</button>
+            <button class="btn" id="tplRevert">되돌리기</button>
+            <span class="dirty" id="tplDirty"></span>
+            <span class="spacer"></span>
+            <button class="btn danger" id="tplClear">슬롯 비우기</button>
+          </div>
+        </div>
+        <div>
+          <div class="muted" style="margin-bottom:4px">미리보기 (현재 입력값 기준)</div>
+          <div class="output" id="tplPreview"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 변수 설정 -->
+  <section class="tab" id="tab-vars">
+    <div class="card">
+      <h2>변수 목록 <span class="muted" id="varCount"></span></h2>
+      <table>
+        <thead><tr><th>변수</th><th>이름(설명)</th><th>종류</th><th>최소</th><th>최대</th><th></th></tr></thead>
+        <tbody id="varRows"></tbody>
+      </table>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="addVar">+ 변수 추가</button>
+        <span class="spacer"></span>
+        <button class="btn" id="exportData">백업 파일로 내보내기</button>
+        <button class="btn" id="importData">백업 불러오기</button>
+        <input type="file" id="importFile" accept=".json" hidden>
+      </div>
+      <p class="muted">양식에서 <b>(a)</b>처럼 괄호 안에 변수 글자를 쓰면 그 자리에 값이 들어갑니다. 정수는 최소·최대 범위를 벗어나면 빨간색으로 표시됩니다.</p>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const STORE_KEY = 'txtmake.v1';
+const MAX_VARS = 20, MAX_SLOTS = 18;
+const KEYS = 'abcdefghijklmnopqrst'.split('');
+const TYPES = { url: 'URL', text: '문자열', multiline: '여러 줄 문자열', int: '정수' };
+const TRANSFER = '이관여부'; // 특수변수: 문구 만들기에서 체크하면 변수 설정에 적어 둔 문자열이 들어감
+
+// 저장값이 없을 때 쓰는 기본 설정. 파일은 공개되므로 양식·문구·열 연결은 넣지 않음 (백업 불러오기로 채움)
+const defaults = () => ({
+  vars: [
+    { key: 'a', label: '항목', type: 'text' },
+    { key: 'b', label: '플레이스', type: 'text' },
+    { key: 'c', label: '주소', type: 'url' },
+    { key: 'd', label: '주문수량', type: 'int', min: 1, max: 2000 },
+    { key: 'e', label: '데일리캡', type: 'int', min: 1, max: 2000 },
+    { key: 'f', label: '공유시트 주소', type: 'url' },
+    { key: 'g', label: '첨부파일', type: 'url' },
+    { key: 'h', label: '주문번호', type: 'text' },
+    { key: 'i', label: '경로', type: 'text' },
+    { key: 'j', label: '고객', type: 'text' },
+    { key: 'k', label: TRANSFER, type: 'text', special: true, text: '' },
+  ],
+  slots: Array.from({ length: MAX_SLOTS }, () => ({ name: '', body: '' })),
+  values: {},
+  slot: 0,
+});
+
+let state = load();
+let editSlot = state.slot;
+
+// 저장소·백업 파일의 값을 정해진 모양으로만 받아들임 (조작된 파일이 화면에 HTML/스크립트를 심지 못하게)
+function str(x) { return typeof x === 'string' ? x : x == null ? '' : String(x); }
+function intOr(x, d) { return Number.isFinite(+x) && x !== '' && x !== null ? Math.trunc(+x) : d; }
+function sanitize(s) {
+  const seen = new Set();
+  const vars = (Array.isArray(s.vars) ? s.vars : []).filter(v => v && /^[a-t]$/.test(v.key) && !seen.has(v.key) && seen.add(v.key)).slice(0, MAX_VARS).map(v => {
+    const o = { key: v.key, label: str(v.label).slice(0, 100) || `변수 ${v.key}`, type: TYPES[v.type] ? v.type : 'text' };
+    if (o.type === 'int') { o.min = intOr(v.min, 1); o.max = intOr(v.max, 10000); }
+    if (v.special === true) Object.assign(o, { type: 'text', special: true, text: str(v.text) });
+    return o;
+  });
+  const keys = new Set(vars.map(v => v.key));
+  const pick = (obj, f) => Object.fromEntries(Object.entries(obj && typeof obj === 'object' ? obj : {}).filter(([k]) => keys.has(k)).map(([k, x]) => [k, f(x)]));
+  return {
+    vars,
+    slots: (Array.isArray(s.slots) ? s.slots : []).map(x => ({ name: str(x?.name), body: str(x?.body) })),
+    values: pick(s.values, str),
+    slot: intOr(s.slot, 0),
+    colMap: Object.fromEntries(Object.entries(pick(s.colMap, x => intOr(x, null))).filter(([, x]) => x !== null && x >= 0 && x < 200)),
+    pasteSlots: Array.isArray(s.pasteSlots) ? s.pasteSlots.slice(0, 5).map(x => x == null ? null : intOr(x, null)) : undefined,
+    pasteText: str(s.pasteText),
+    transferN: str(s.transferN),
+  };
+}
+
+// 예전 버전 데이터에 없는 항목 채우기
+function normalize(s) {
+  s = sanitize(s);
+  while (s.slots.length < MAX_SLOTS) s.slots.push({ name: '', body: '' });
+  s.slots.length = MAX_SLOTS; // 예전 20칸 데이터는 18칸으로 자름
+  if (s.slot >= MAX_SLOTS) s.slot = 0;
+  if (s.pasteSlots) s.pasteSlots = s.pasteSlots.map(i => i != null && i < MAX_SLOTS ? i : null);
+  s.values ||= {};
+  s.slot ||= 0;
+  s.colMap ||= {};
+  s.pasteSlots ||= [s.slot, null, null, null, null];
+  s.pasteText ||= '';
+  // 특수변수 '이관여부': 없으면 같은 이름의 변수를 특수변수로 바꾸거나 빈 글자로 새로 만듦
+  if (!s.vars.some(v => v.special)) {
+    const same = s.vars.find(v => v.label.trim() === TRANSFER);
+    const key = KEYS.find(k => !s.vars.some(v => v.key === k));
+    if (same) Object.assign(same, { type: 'text', special: true, text: same.text ?? '' });
+    else if (key) { s.vars.push({ key, label: TRANSFER, type: 'text', special: true, text: '' }); s.vars.sort((x, y) => x.key.localeCompare(y.key)); }
+  }
+  return s;
+}
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE_KEY));
+    if (s && Array.isArray(s.vars) && Array.isArray(s.slots)) return normalize(s);
+  } catch {}
+  return normalize(defaults());
+}
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch { toast('저장 실패: 브라우저 저장소를 사용할 수 없습니다'); }
+}
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 1600); }
+const varOf = k => state.vars.find(v => v.key === k);
+const usedKeys = body => new Set([...body.matchAll(/\(([a-t])\)/g)].map(m => m[1]).filter(varOf));
+
+// 값 검사: 오류 메시지 또는 '' 반환
+function check(v, val) {
+  if (val === undefined || val === '') return '';
+  if (v.type === 'int') {
+    // 데일리캡은 '2일1'처럼 숫자가 든 글자도 허용
+    if (v.label.trim() === DAILY_CAP && !/^-?\d+$/.test(val.trim()) && /\d/.test(val)) return '';
+    if (!/^-?\d+$/.test(val.trim())) return '숫자만 입력하세요'; // 이관 수량을 빼서 음수가 되면 범위 오류로 표시
+    const n = Number(val), min = v.min ?? 1, max = v.max ?? 10000;
+    if (n < min || n > max) return `${min} ~ ${max} 사이여야 합니다`;
+  }
+  if (v.type === 'url') {
+    const raw = val.trim();
+    try {
+      const u = new URL(/^[a-z]+:\/\//i.test(raw) ? raw : 'https://' + raw);
+      if (!/^https?:$/.test(u.protocol) || !u.hostname.includes('.')) throw 0;
+    } catch { return '올바른 주소가 아닙니다'; }
+  }
+  return '';
+}
+
+// 데일리캡이 '-'이면 아래 순서로 먼저 값이 있는 변수의 값을 대신 씀 (저장된 '-'는 그대로 둠)
+const DAILY_CAP = '데일리캡';
+const DAILY_CAP_FALLBACK = ['주문수량', '총주문수량', '진행건수', '세팅수량'];
+const varByLabel = label => state.vars.find(v => v.label.trim() === label);
+const rawOf = v => (state.values[v.key] ?? '').toString();
+// '-'처럼 보이는 문자(시트·한글 입력의 –, −, －, ㅡ 등)와 보이지 않는 공백도 '-'로 인정
+const isDash = s => /^[-‐‑‒–—―−－﹣ㅡ]$/.test(s.replace(/[\s​-‍⁠﻿]/g, ''));
+// 이관여부 체크 시 이 이름의 변수들(과 숫자인 데일리캡)에서 이관 수량(1~2000)만큼 뺌
+const TRANSFER_QTY = ['주문수량', '총주문수량', '진행건수', '세팅수량'];
+const validTransferN = s => /^\d+$/.test(String(s ?? '').trim()) && +s >= 1 && +s <= 2000;
+function transferN() {
+  const v = state.vars.find(x => x.special);
+  return v && state.values[v.key] && validTransferN(state.transferN) ? +state.transferN : 0;
+}
+// 데일리캡도 이관 수량만큼 뺄지: 주문수량의 절반 이상이면 뺌, 주문수량이 숫자가 아니면 빼지 않음
+function dailyCapFollows(cap) {
+  const q = varByLabel('주문수량'), qty = q ? rawOf(q).trim() : '';
+  return /^\d+$/.test(qty) && +qty / 2 <= cap;
+}
+// 문구에 실제로 들어갈 값
+function valueOf(v) {
+  if (v.special) return state.values[v.key] ? `\n${v.text ?? ''}\n` : ''; // 체크 시 앞뒤로 줄바꿈
+  let val = rawOf(v);
+  // 데일리캡이 '건'으로 끝나면 마지막 '건'은 뺌 (예: 2일1건 → 2일1, 양식의 '(e)건'과 겹치지 않게)
+  if (v.label.trim() === DAILY_CAP) val = val.trim().replace(/건$/, '');
+  // 숫자인 데일리캡은 주문수량/2 <= 데일리캡일 때만 같이 뺌 (이관 전 값으로 비교, '-'이면 아래에서 이미 뺀 값을 가져옴)
+  if (TRANSFER_QTY.includes(v.label.trim()) || v.label.trim() === DAILY_CAP) {
+    const n = transferN();
+    if (/^\d+$/.test(val.trim())) return n && (v.label.trim() !== DAILY_CAP || dailyCapFollows(+val.trim())) ? String(+val.trim() - n) : val;
+  }
+  if (v.label.trim() !== DAILY_CAP || !isDash(val)) return val;
+  for (const label of DAILY_CAP_FALLBACK) {
+    const src = varByLabel(label);
+    if (src && src !== v && rawOf(src).trim()) return valueOf(src);
+  }
+  return '';
+}
+
+// 양식에 값 채우기. html=true면 오류를 표시. 값이 없는 변수 자리는 경고 없이 비워 둠
+function render(body, html) {
+  // '첨부파일' 변수가 시트 열 연결에서 '안 씀' 상태이면,
+  // 해당 변수가 포함된 줄(예: '첨부파일: (g)')을 그 바로 앞의 줄바꿈까지 결과에서 제거한다.
+  // (첫 줄이라 앞에 줄바꿈이 없으면 뒤의 줄바꿈을 지움)
+  const attachmentVar = state.vars.find(v => v.label.trim() === '첨부파일');
+  if (attachmentVar && (state.colMap[attachmentVar.key] == null || state.colMap[attachmentVar.key] === '')) {
+    const key = attachmentVar.key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const line = '[^\\n]*\\(' + key + '\\)[^\\n]*';
+    body = body.replace(new RegExp('\\n' + line, 'g'), '').replace(new RegExp('^' + line + '\\n?'), '');
+  }
+
+  const out = [], problems = [];
+  let last = 0;
+  for (const m of body.matchAll(/\(([a-t])\)/g)) {
+    const v = varOf(m[1]);
+    if (!v) continue;
+    out.push(html ? linkify(body.slice(last, m.index)) : body.slice(last, m.index));
+    const val = valueOf(v);
+    const val2 = v.type === 'int' ? val.trim() : val;
+    const err = check(v, val);
+    if (err) problems.push(`(${v.key}) ${v.label}: ${err}`);
+    if (html) out.push(err ? `<mark>${linkify(val2)}</mark>` : v.type === 'url' && val2.trim() ? urlSpan(val2) : linkify(val2));
+    else out.push(val2);
+    last = m.index + m[0].length;
+  }
+  out.push(html ? linkify(body.slice(last)) : body.slice(last));
+  return { text: out.join(''), problems: [...new Set(problems)] };
+}
+
+// 미리보기의 주소 표시: 더블클릭하면 새 탭에서 열림
+const urlSpan = (text, href = text.trim()) =>
+  `<span class="url" data-url="${esc(/^[a-z]+:\/\//i.test(href) ? href : 'https://' + href)}" title="더블클릭하면 새 탭에서 열림">${esc(text)}</span>`;
+// 일반 글자 속 http(s):// 주소도 같은 방식으로 감쌈 (끝의 문장부호는 주소에서 뺌)
+const linkify = s => String(s).split(/(https?:\/\/[^\s<>"]*[^\s<>".,;:!?)\]])/).map((part, i) => i % 2 ? urlSpan(part) : esc(part)).join('');
+document.addEventListener('dblclick', e => {
+  const u = e.target.closest?.('#output .url, #pasteOut .url');
+  if (!u) return;
+  window.getSelection()?.removeAllRanges();
+  window.open(u.dataset.url, '_blank', 'noopener');
+});
+
+// ---------- 탭 ----------
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  if (b.dataset.tab !== 'tpl' && isDirty() && !confirm('양식 편집 내용이 저장되지 않았습니다. 그래도 이동할까요?')) return;
+  if (b.dataset.tab !== 'tpl') loadEditor(editSlot);
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.id === 'tab-' + b.dataset.tab));
+  renderAll();
+});
+
+// ---------- 문구 만들기 ----------
+const slotTitle = (s, i) => `${i + 1}. ${s.name || (s.body ? '(이름 없음)' : '(비어 있음)')}`;
+
+function renderMake() {
+  $('makeSlot').innerHTML = state.slots.map((s, i) => `<option value="${i}" ${i === state.slot ? 'selected' : ''} ${!s.body ? 'disabled' : ''}>${esc(slotTitle(s, i))}</option>`).join('');
+  const body = state.slots[state.slot].body;
+  const used = usedKeys(body);
+  const focused = document.activeElement?.dataset?.key;
+  $('makeInputs').innerHTML = state.vars.map(v => {
+    if (v.special) return ''; // 이관여부는 결과 옆 체크박스로 입력
+    const val = state.values[v.key] ?? '';
+    const err = check(v, valueOf(v));
+    const attrs = `data-key="${v.key}" class="${err ? 'bad' : ''}"`;
+    const hint = v.type === 'int' ? `${v.min ?? 1}~${v.max ?? 10000}` : TYPES[v.type];
+    const input = v.type === 'multiline'
+      ? `<textarea ${attrs} style="min-height:70px">${esc(val)}</textarea>`
+      : `<input ${attrs} value="${esc(val)}" ${v.type === 'int' ? 'inputmode="numeric"' : ''} placeholder="${v.type === 'url' ? 'https://' : ''}">`;
+    return `<label class="field ${used.has(v.key) ? '' : 'unused'}"><span><b>(${v.key})</b> ${esc(v.label)} · ${hint}${used.has(v.key) ? '' : ' · 이 양식에선 안 씀'}</span>${input}<div class="err">${err}</div></label>`;
+  }).join('');
+  $('makeInputs').querySelectorAll('[data-key]').forEach(el => {
+    el.oninput = () => {
+      state.values[el.dataset.key] = el.value;
+      save();
+      const v = varOf(el.dataset.key), err = check(v, valueOf(v));
+      el.classList.toggle('bad', !!err);
+      el.nextElementSibling.textContent = err;
+      renderOutput();
+    };
+  });
+  if (focused) $('makeInputs').querySelector(`[data-key="${focused}"]`)?.focus();
+  syncTransfer();
+  renderOutput();
+}
+// 이관여부 체크박스 (문구 만들기 결과 옆, 시트 붙여넣기 양식 선택 옆) — 같은 값을 공유
+function syncTransfer() {
+  const v = state.vars.find(x => x.special);
+  document.querySelectorAll('input.transfer').forEach(el => {
+    el.parentElement.hidden = !v;
+    if (v) { el.checked = !!state.values[v.key]; el.parentElement.title = `(${v.key}) 체크하면 "${v.text ?? ''}" 출력`; }
+  });
+  const n = state.transferN ?? '';
+  document.querySelectorAll('input.transferN').forEach(el => {
+    el.hidden = !state.vars.some(x => x.special);
+    if (document.activeElement !== el) el.value = n;
+    el.classList.toggle('bad', n !== '' && !validTransferN(n));
+  });
+}
+document.querySelectorAll('input.transferN').forEach(el => el.oninput = () => {
+  state.transferN = el.value.trim();
+  save(); syncTransfer(); renderOutput(); renderPaste();
+});
+document.querySelectorAll('input.transfer').forEach(el => el.onchange = () => {
+  const v = state.vars.find(x => x.special);
+  if (!v) return;
+  state.values[v.key] = el.checked ? '1' : '';
+  save(); syncTransfer(); renderOutput(); renderPaste();
+});
+function renderOutput() {
+  const { text, problems } = render(state.slots[state.slot].body, true);
+  $('output').innerHTML = text || '<span class="muted">양식이 비어 있습니다</span>';
+  $('outErr').innerHTML = problems.map(esc).join('<br>');
+}
+$('makeSlot').onchange = e => { state.slot = +e.target.value; save(); renderMake(); };
+$('clearValues').onclick = () => { if (confirm('입력값을 모두 지울까요?')) { state.values = {}; save(); renderMake(); } };
+async function copySlot(i) {
+  const { text, problems } = render(state.slots[i].body, false);
+  if (problems.length && !confirm('확인이 필요한 값이 있습니다:\n' + problems.join('\n') + '\n\n그래도 복사할까요?')) return;
+  try { await navigator.clipboard.writeText(text); }
+  catch { const t = document.createElement('textarea'); t.value = text; document.body.append(t); t.select(); document.execCommand('copy'); t.remove(); }
+  toast('복사했습니다');
+}
+$('copyOut').onclick = () => copySlot(state.slot);
+
+// ---------- 시트 붙여넣기 ----------
+const colName = i => (i >= 26 ? colName(Math.floor(i / 26) - 1) : '') + String.fromCharCode(65 + i % 26);
+const short = (s, n = 18) => s.length > n ? s.slice(0, n) + '…' : s;
+
+// 구글 시트 복사 텍스트(TSV)의 첫 행만 읽음. 줄바꿈이 든 칸은 "..."로 감싸져 옴
+function parseRow(text) {
+  text = text.replace(/^[\r\n]+/, '');
+  const cells = [];
+  let cur = '', quoted = false, i = 0;
+  for (; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch !== '"') cur += ch;
+      else if (text[i + 1] === '"') { cur += '"'; i++; }
+      else quoted = false;
+    } else if (ch === '"' && cur === '') quoted = true;
+    else if (ch === '\t') { cells.push(cur); cur = ''; }
+    else if (ch === '\n' || ch === '\r') break;
+    else cur += ch;
+  }
+  cells.push(cur);
+  return { cells: text ? cells : [], more: text.slice(i).trim() !== '' };
+}
+
+function applyPaste() {
+  const { cells } = parseRow(state.pasteText);
+  for (const v of state.vars) {
+    const idx = state.colMap[v.key];
+    if (idx != null && idx !== '') state.values[v.key] = (cells[idx] ?? '').trim();
+  }
+  save();
+}
+
+function renderPaste() {
+  const { cells, more } = parseRow(state.pasteText);
+  if (document.activeElement !== $('pasteIn')) $('pasteIn').value = state.pasteText;
+  $('pasteInfo').textContent = cells.length
+    ? `${cells.length}개 열 인식` + (more ? ' · 여러 행이 들어와 첫 행만 사용합니다' : '')
+    : '';
+
+  const mapped = Object.values(state.colMap).filter(x => x != null && x !== '').map(Number);
+  const nCols = Math.max(cells.length, 10, ...mapped.map(x => x + 1));
+  $('mapRows').innerHTML = state.vars.filter(v => !v.special).map(v => {
+    const idx = state.colMap[v.key], val = state.values[v.key] ?? '', shown = valueOf(v), err = check(v, shown);
+    const opts = ['<option value="">— 안 씀 —</option>'].concat(Array.from({ length: nCols }, (_, i) =>
+      `<option value="${i}" ${String(idx) === String(i) ? 'selected' : ''}>${colName(i)}: ${esc(i < cells.length ? short(cells[i].trim() || '(빈칸)') : '')}</option>`));
+    return `<tr><td class="key">(${v.key})</td>
+      <td><select data-key="${v.key}">${opts.join('')}</select><div class="muted">${esc(v.label)} · ${TYPES[v.type]}</div></td>
+      <td class="val ${err ? 'err' : ''}">${esc(short(val, 60)) || '<span class="muted">비어 있음</span>'}${shown !== val ? ` → ${esc(short(shown, 60)) || '(빈 값)'}` : ''}${err ? '<br>' + err : ''}</td></tr>`;
+  }).join('');
+  $('mapRows').querySelectorAll('select').forEach(sel => sel.onchange = () => {
+    if (sel.value === '') delete state.colMap[sel.dataset.key];
+    else state.colMap[sel.dataset.key] = +sel.value;
+    applyPaste(); renderPaste();
+  });
+
+  $('pasteSlotSel').innerHTML = state.pasteSlots.map((cur, n) => `<select data-n="${n}"><option value="">${n + 1}번: 없음</option>${
+    state.slots.map((s, i) => s.body ? `<option value="${i}" ${cur === i ? 'selected' : ''}>${esc(short(slotTitle(s, i), 14))}</option>` : '').join('')}</select>`).join('');
+  $('pasteSlotSel').querySelectorAll('select').forEach(sel => sel.onchange = () => {
+    state.pasteSlots[+sel.dataset.n] = sel.value === '' ? null : +sel.value;
+    save(); renderPaste();
+  });
+
+  syncTransfer();
+  const shown = state.pasteSlots.filter(i => i != null && state.slots[i]?.body);
+  $('pasteOut').innerHTML = shown.length ? shown.map(i => {
+    const { text, problems } = render(state.slots[i].body, true);
+    return `<div class="result"><h3>${esc(slotTitle(state.slots[i], i))}<span class="spacer"></span><button class="btn primary" data-copy="${i}">복사</button></h3>
+      <div class="output">${text}</div><div class="err">${problems.map(esc).join('<br>')}</div></div>`;
+  }).join('') : '<p class="muted">위에서 표시할 양식을 고르세요</p>';
+  $('pasteOut').querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copySlot(+b.dataset.copy));
+}
+$('pasteIn').oninput = () => { state.pasteText = $('pasteIn').value; applyPaste(); renderPaste(); };
+$('pasteClear').onclick = () => { state.pasteText = ''; save(); $('pasteIn').value = ''; renderPaste(); };
+
+// ---------- 양식 편집 ----------
+function isDirty() {
+  const s = state.slots[editSlot];
+  return $('tplName').value !== s.name || $('tplBody').value !== s.body;
+}
+function loadEditor(i) {
+  editSlot = i;
+  $('tplName').value = state.slots[i].name;
+  $('tplBody').value = state.slots[i].body;
+}
+function renderTpl() {
+  $('slotList').innerHTML = state.slots.map((s, i) =>
+    `<button class="slot ${i === editSlot ? 'on' : ''} ${s.body ? '' : 'empty'}" data-i="${i}" title="${esc(s.name)}"><small>${i + 1}</small>${esc(s.name || (s.body ? '(이름 없음)' : '비어 있음'))}</button>`).join('');
+  $('slotList').querySelectorAll('.slot').forEach(b => b.onclick = () => {
+    if (+b.dataset.i === editSlot) return;
+    if (isDirty() && !confirm('저장하지 않은 변경이 있습니다. 버리고 이동할까요?')) return;
+    loadEditor(+b.dataset.i); renderTpl();
+  });
+  $('tplNo').textContent = editSlot + 1;
+  $('tplChips').innerHTML = state.vars.map(v => `<button class="chip" data-key="${v.key}">(${v.key}) ${esc(v.label)}</button>`).join('');
+  $('tplChips').querySelectorAll('.chip').forEach(c => c.onclick = () => {
+    const ta = $('tplBody'), ins = `(${c.dataset.key})`, p = ta.selectionStart;
+    ta.setRangeText(ins, p, ta.selectionEnd, 'end'); ta.focus(); updateTplPreview();
+  });
+  updateTplPreview();
+}
+function updateTplPreview() {
+  $('tplPreview').innerHTML = render($('tplBody').value, true).text || '<span class="muted">내용을 입력하세요</span>';
+  $('tplDirty').textContent = isDirty() ? '● 저장 안 됨' : '';
+}
+$('tplBody').oninput = $('tplName').oninput = updateTplPreview;
+$('tplSave').onclick = () => {
+  state.slots[editSlot] = { name: $('tplName').value.trim(), body: $('tplBody').value };
+  $('tplName').value = state.slots[editSlot].name;
+  if (state.slots[editSlot].body) state.slot = editSlot;
+  save(); renderTpl(); toast(`슬롯 ${editSlot + 1} 저장됨`);
+};
+$('tplRevert').onclick = () => { loadEditor(editSlot); renderTpl(); };
+$('tplClear').onclick = () => {
+  if (!confirm(`슬롯 ${editSlot + 1}을(를) 비울까요?`)) return;
+  state.slots[editSlot] = { name: '', body: '' };
+  if (state.slot === editSlot) state.slot = Math.max(0, state.slots.findIndex(s => s.body));
+  save(); loadEditor(editSlot); renderTpl();
+};
+
+// ---------- 변수 설정 ----------
+function renderVars() {
+  $('varCount').textContent = `${state.vars.length} / ${MAX_VARS}`;
+  $('addVar').disabled = state.vars.length >= MAX_VARS;
+  $('varRows').innerHTML = state.vars.map((v, i) => v.special ? `<tr data-i="${i}">
+    <td class="key">(${v.key})</td>
+    <td><input value="${esc(v.label)}" disabled></td>
+    <td class="muted">특수변수<br>(체크 시 출력)</td>
+    <td colspan="2"><input data-f="text" value="${esc(v.text ?? '')}" placeholder="체크하면 출력할 문자열"></td>
+    <td></td></tr>` : `<tr data-i="${i}">
+    <td class="key">(${v.key})</td>
+    <td><input data-f="label" value="${esc(v.label)}"></td>
+    <td><select data-f="type">${Object.entries(TYPES).map(([k, n]) => `<option value="${k}" ${k === v.type ? 'selected' : ''}>${n}</option>`).join('')}</select></td>
+    <td>${v.type === 'int' ? `<input type="number" data-f="min" value="${v.min ?? 1}">` : ''}</td>
+    <td>${v.type === 'int' ? `<input type="number" data-f="max" value="${v.max ?? 10000}">` : ''}</td>
+    <td><button class="btn danger" data-del>삭제</button></td></tr>`).join('');
+  $('varRows').querySelectorAll('tr').forEach(tr => {
+    const v = state.vars[+tr.dataset.i];
+    tr.querySelectorAll('[data-f]').forEach(el => el.onchange = () => {
+      const f = el.dataset.f;
+      if (f === 'min' || f === 'max') v[f] = Math.trunc(Number(el.value)) || 0;
+      else v[f] = f === 'label' ? el.value.trim() || `변수 ${v.key}` : el.value;
+      if (v.type === 'int') { v.min ??= 1; v.max ??= 10000; } else { delete v.min; delete v.max; }
+      save(); renderVars();
+    });
+    if (v.special) return;
+    tr.querySelector('[data-del]').onclick = () => {
+      const uses = state.slots.map((s, i) => usedKeys(s.body).has(v.key) ? i + 1 : 0).filter(Boolean);
+      const warn = uses.length ? `\n\n슬롯 ${uses.join(', ')}에서 사용 중입니다. 삭제하면 그 자리에 (${v.key})가 그대로 남습니다.` : '';
+      if (!confirm(`(${v.key}) ${v.label} 변수를 삭제할까요?${warn}`)) return;
+      state.vars.splice(+tr.dataset.i, 1); delete state.values[v.key]; delete state.colMap[v.key];
+      save(); renderVars();
+    };
+  });
+}
+$('addVar').onclick = () => {
+  const key = KEYS.find(k => !varOf(k));
+  if (!key) return;
+  state.vars.push({ key, label: `변수 ${key}`, type: 'text' });
+  state.vars.sort((x, y) => x.key.localeCompare(y.key));
+  save(); renderVars();
+};
+$('exportData').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }));
+  a.download = `문구생성기_백업_${new Date().toISOString().slice(0, 10)}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+};
+$('importData').onclick = () => $('importFile').click();
+$('importFile').onchange = async e => {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  try {
+    const s = JSON.parse(await file.text());
+    if (!Array.isArray(s.vars) || !Array.isArray(s.slots)) throw 0;
+    if (!confirm('현재 데이터를 백업 파일 내용으로 덮어쓸까요?')) return;
+    state = normalize(s); save(); loadEditor(state.slot); renderAll(); toast('불러왔습니다');
+  } catch { alert('백업 파일 형식이 올바르지 않습니다'); }
+};
+
+function renderAll() { renderMake(); renderPaste(); renderTpl(); renderVars(); }
+loadEditor(editSlot);
+renderAll();
+</script>
+<script>
+// ---------- 날짜 목록 (구글 시트 붙여넣기용) ----------
+(() => {
+const STORE_KEY = 'datelist.v1';
+
+// 대한민국 공휴일 (원래 날짜 + 대체공휴일 + 선거일·임시공휴일)
+// 출처 교차확인: kholidayz.com, date.nager.at (2026-10 기준)
+const DEFAULT_HOLIDAYS = `
+2025-01-01 신정
+2025-01-27 임시공휴일
+2025-01-28 설날 연휴
+2025-01-29 설날
+2025-01-30 설날 연휴
+2025-03-01 삼일절
+2025-03-03 대체공휴일(삼일절)
+2025-05-05 어린이날·부처님오신날
+2025-05-06 대체공휴일
+2025-06-03 대통령 선거일
+2025-06-06 현충일
+2025-08-15 광복절
+2025-10-03 개천절
+2025-10-05 추석 연휴
+2025-10-06 추석
+2025-10-07 추석 연휴
+2025-10-08 대체공휴일(추석)
+2025-10-09 한글날
+2025-12-25 성탄절
+2026-01-01 신정
+2026-02-16 설날 연휴
+2026-02-17 설날
+2026-02-18 설날 연휴
+2026-03-01 삼일절
+2026-03-02 대체공휴일(삼일절)
+2026-05-01 노동절
+2026-05-05 어린이날
+2026-05-24 부처님오신날
+2026-05-25 대체공휴일(부처님오신날)
+2026-06-03 지방선거일
+2026-06-06 현충일
+2026-07-17 제헌절
+2026-08-15 광복절
+2026-08-17 대체공휴일(광복절)
+2026-09-24 추석 연휴
+2026-09-25 추석
+2026-09-26 추석 연휴
+2026-10-03 개천절
+2026-10-05 대체공휴일(개천절)
+2026-10-09 한글날
+2026-12-25 성탄절
+2027-01-01 신정
+2027-02-06 설날 연휴
+2027-02-07 설날
+2027-02-08 설날 연휴
+2027-02-09 대체공휴일(설날)
+2027-03-01 삼일절
+2027-05-01 노동절
+2027-05-03 대체공휴일(노동절) - 확인 필요
+2027-05-05 어린이날
+2027-05-13 부처님오신날
+2027-06-06 현충일
+2027-07-17 제헌절
+2027-07-19 대체공휴일(제헌절)
+2027-08-15 광복절
+2027-08-16 대체공휴일(광복절)
+2027-09-14 추석 연휴
+2027-09-15 추석
+2027-09-16 추석 연휴
+2027-10-03 개천절
+2027-10-04 대체공휴일(개천절)
+2027-10-09 한글날
+2027-10-11 대체공휴일(한글날)
+2027-12-25 성탄절
+2027-12-27 대체공휴일(성탄절)
+`.trim();
+
+const pad = n => String(n).padStart(2, '0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+const defaults = { start: iso(new Date()), rows: 6, repMin: 1, repMax: 1, skip: 0, fmt: 'dot', exSat: false, exSun: false, exHol: false, hol: DEFAULT_HOLIDAYS };
+let cfg = { ...defaults };
+try { Object.assign(cfg, JSON.parse(localStorage.getItem(STORE_KEY)) || {}); } catch {}
+const persist = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(cfg)); } catch {} };
+
+let seed = Date.now() >>> 0;
+function rng(s) { // mulberry32: 같은 seed면 같은 결과 → 설정만 바꿀 때 결과가 마구 바뀌지 않게
+  return () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+
+function holidays() {
+  const map = new Map();
+  for (const line of cfg.hol.split('\n')) {
+    const m = line.trim().match(/^(\d{4}-\d{2}-\d{2})\s*(.*)$/);
+    if (m) map.set(m[1], m[2] || '공휴일');
+  }
+  return map;
+}
+
+function format(d) {
+  const y = d.getFullYear(), m = d.getMonth() + 1, day = d.getDate();
+  switch (cfg.fmt) {
+    case 'dot0': return `${y}. ${pad(m)}. ${pad(day)}`;
+    case 'dash': return `${y}-${pad(m)}-${pad(day)}`;
+    case 'slash': return `${y}/${pad(m)}/${pad(day)}`;
+    default: return `${y}. ${m}. ${day}`;
+  }
+}
+
+// 제외할 날(토·일·공휴일)이 아닌지
+function isAllowed(d, hol) {
+  const wd = d.getDay();
+  return !(cfg.exSat && wd === 6) && !(cfg.exSun && wd === 0) && !(cfg.exHol && hol.has(iso(d)));
+}
+// d가 제외일이면 그다음 가능한 날로 밂
+function nextAllowed(d, hol) {
+  const cur = new Date(d);
+  for (let guard = 0; guard < 40000 && !isAllowed(cur, hol); guard++) cur.setDate(cur.getDate() + 1);
+  return cur;
+}
+
+// 시작일부터 허용된 날짜를 차례로 내놓음
+function* allowedDates(hol) {
+  const [y, m, d] = cfg.start.split('-').map(Number);
+  const cur = new Date(y, m - 1, d);
+  for (let guard = 0; guard < 40000; guard++, cur.setDate(cur.getDate() + 1)) {
+    if (isAllowed(cur, hol)) yield new Date(cur);
+  }
+}
+
+// 반복 횟수를 고르게 뽑음: 최소~최대 값을 한 번씩 섞어 담은 주머니에서 하나씩 꺼내고, 비면 다시 채움
+// (예: 1~2면 1과 2가 번갈아 반반씩 나오되 순서는 무작위)
+function repPicker(rand) {
+  let bag = [];
+  return () => {
+    if (!bag.length) {
+      bag = Array.from({ length: cfg.repMax - cfg.repMin + 1 }, (_, i) => cfg.repMin + i);
+      for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
+    }
+    return bag.pop();
+  };
+}
+
+function buildColumn(rand, hol) {
+  const col = [];
+  const gen = allowedDates(hol);
+  const pick = repPicker(rand);
+  if (cfg.skip > 0) {
+    // 건너뛰기: 매 줄마다 건너뛰기 일수만큼 달력으로 뒤로 가고, 그날이 제외일이면 다음 가능한 날로 밂
+    // 묶음이 끝나도 이어서 진행 (예: 10/26 시작, 2일, 주말 제외 → 10/26, 10/28, 10/30, 11/2, 11/4 …)
+    const { value: first } = gen.next();
+    let cur = first;
+    while (cur && col.length < cfg.rows) {
+      col.push(cur);
+      cur = new Date(cur); cur.setDate(cur.getDate() + cfg.skip); cur = nextAllowed(cur, hol);
+    }
+    return col;
+  }
+  while (col.length < cfg.rows) {
+    const { value: d, done } = gen.next();
+    if (done) break;
+    const times = pick();
+    for (let i = 0; i < times && col.length < cfg.rows; i++) col.push(d);
+  }
+  return col;
+}
+
+function generate() {
+  // 시작 날짜가 오늘(PC 날짜)이거나 과거면 경고
+  $('dl-startWarn').textContent = /^\d{4}-\d{2}-\d{2}$/.test(cfg.start) && cfg.start <= iso(new Date()) ? '(주의:날짜확인)' : '';
+  const err = [];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(cfg.start)) err.push('시작 날짜를 입력하세요');
+  if (!(cfg.rows >= 1 && cfg.rows <= 5000)) err.push('행 개수는 1~5000');
+  if (!(cfg.repMin >= 1 && cfg.repMax >= cfg.repMin && cfg.repMax <= 100)) err.push('반복 횟수는 1~100, 최소 ≤ 최대');
+  if (!(cfg.skip >= 0 && cfg.skip <= 100)) err.push('건너뛰기는 0~100');
+  $('dl-err').textContent = err.join(' / ');
+  if (err.length) { $('dl-out').value = ''; $('dl-preview').innerHTML = ''; return; }
+
+  const hol = holidays();
+  const rand = rng(seed);
+  const cols = [buildColumn(rand, hol)]; // 열은 1개
+  const lines = Array.from({ length: cfg.rows }, (_, r) => cols.map(c => c[r] ? format(c[r]) : '').join('\t'));
+  $('dl-out').value = lines.join('\n');
+
+  const last = cols.flat().reduce((a, b) => (b > a ? b : a), cols[0][0]);
+  $('dl-summary').textContent = `${cfg.rows}행 · 마지막 날짜 ${format(last)}`;
+
+  // 공휴일 목록이 끝나는 해를 넘어가면 경고
+  const years = [...hol.keys()].map(k => +k.slice(0, 4));
+  const maxYear = years.length ? Math.max(...years) : 0;
+  if (cfg.exHol && last.getFullYear() > maxYear) $('dl-err').textContent = `공휴일 목록에 ${last.getFullYear()}년이 없습니다. '인터넷에서 추가'를 누르거나 직접 입력하세요.`;
+
+  const show = Math.min(cfg.rows, 60);
+  $('dl-preview').innerHTML = `<table class="prev">${lines.slice(0, show).map((l, i) => `<tr><td class="n">${i + 1}</td>${cols.map(c => {
+    const d = c[i]; if (!d) return '<td></td>';
+    const name = hol.get(iso(d)), wd = '일월화수목금토'[d.getDay()];
+    return `<td title="${esc(name || '')}">${format(d)} <span class="muted">(${wd})${name ? ' ' + esc(name) : ''}</span></td>`;
+  }).join('')}</tr>`).join('')}</table>${cfg.rows > show ? `<p class="muted">미리보기는 ${show}행까지만 표시</p>` : ''}`;
+}
+
+// ---------- 입력 연결 ----------
+const fields = ['start', 'rows', 'repMin', 'repMax', 'skip', 'fmt', 'exSat', 'exSun', 'exHol', 'hol'];
+for (const f of fields) {
+  const el = $('dl-' + f);
+  if (el.type === 'checkbox') el.checked = cfg[f]; else el.value = cfg[f];
+  el.addEventListener('input', () => {
+    cfg[f] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Math.trunc(Number(el.value)) : el.value;
+    persist(); generate();
+  });
+}
+$('dl-reroll').onclick = () => { seed = (Math.random() * 2 ** 32) >>> 0; generate(); };
+$('dl-copy').onclick = async () => {
+  const text = $('dl-out').value;
+  if (!text) return;
+  try { await navigator.clipboard.writeText(text); }
+  catch { $('dl-out').select(); document.execCommand('copy'); }
+  toast('복사했습니다');
+};
+$('dl-holReset').onclick = () => {
+  if (!confirm('공휴일 목록을 기본값으로 되돌릴까요? 직접 추가한 날짜는 사라집니다.')) return;
+  cfg.hol = $('dl-hol').value = DEFAULT_HOLIDAYS; persist(); generate();
+};
+// date.nager.at 공개 API에서 시작 연도~+2년 공휴일을 받아 목록에 없는 날짜만 추가
+$('dl-holFetch').onclick = async () => {
+  const y0 = +cfg.start.slice(0, 4) || new Date().getFullYear();
+  const have = holidays();
+  let added = 0;
+  try {
+    for (const y of [y0, y0 + 1, y0 + 2]) {
+      const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${y}/KR`);
+      if (!res.ok) throw new Error(res.status);
+      for (const h of await res.json()) {
+        if (!have.has(h.date)) { cfg.hol += `\n${h.date} ${h.localName}`; have.set(h.date, h.localName); added++; }
+      }
+    }
+    cfg.hol = cfg.hol.split('\n').filter(l => l.trim()).sort().join('\n');
+    $('dl-hol').value = cfg.hol; persist(); generate();
+    $('dl-holInfo').textContent = `${y0}~${y0 + 2}년에서 ${added}개 날짜를 추가했습니다 (date.nager.at). 새로 생긴 임시공휴일은 늦게 반영될 수 있습니다.`;
+  } catch (e) {
+    $('dl-holInfo').textContent = '불러오기 실패: 인터넷 연결을 확인하거나 직접 입력하세요.';
+  }
+};
+
+generate();
+})();
+</script>
+</body>
+</html>
