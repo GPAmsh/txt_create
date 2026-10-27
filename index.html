@@ -145,7 +145,6 @@
           <thead><tr><th>변수</th><th>가져올 열</th><th>들어간 값</th></tr></thead>
           <tbody id="mapRows"></tbody>
         </table>
-        <p class="muted">한 번 연결해 두면 저장됩니다. '안 씀'인 변수는 기존 입력값을 그대로 씁니다.</p>
       </div>
       <div class="card">
         <h2>표시할 양식 (최대 5개) <label class="tchk"><input type="checkbox" class="transfer">이관여부</label><input class="transferN" inputmode="numeric" placeholder="1~2000" title="이관여부 체크 시 주문수량·총주문수량·진행건수·세팅수량에서 뺄 수"></h2>
@@ -163,10 +162,10 @@
       <h2>설정</h2>
       <label class="field"><span>시작 날짜</span><input type="date" id="dl-start"><div class="err" id="dl-startWarn"></div></label>
       <label class="field"><span>행 개수</span><input type="number" id="dl-rows" min="1" max="5000"></label>
-      <label class="field"><span>반복 횟수 (최소 ~ 최대, 같으면 고정)</span>
+      <label class="field"><span>반복 횟수 (최소 ~ 최대)</span>
         <div class="pair"><input type="number" id="dl-repMin" min="1" max="100"><span>~</span><input type="number" id="dl-repMax" min="1" max="100"></div>
       </label>
-      <div class="field" style="margin-bottom:10px"><span class="muted" style="display:block;font-size:13px;margin-bottom:3px">건너뛰기 (며칠 간격으로 이어서, 사용 안 하면 같은 날짜 반복)</span>
+      <div class="field" style="margin-bottom:10px"><span class="muted" style="display:block;font-size:13px;margin-bottom:3px">건너뛰기</span>
         <div class="row" style="flex-wrap:nowrap"><label class="tchk"><input type="checkbox" id="dl-skipOn">사용함</label><input type="number" id="dl-skip" min="2" max="100" placeholder="2 이상"></div>
       </div>
       <label class="field"><span>날짜 형식</span>
@@ -254,7 +253,6 @@
         <button class="btn" id="importData">백업 불러오기</button>
         <input type="file" id="importFile" accept=".json" hidden>
       </div>
-      <p class="muted">양식에서 <b>(a)</b>처럼 괄호 안에 변수 글자를 쓰면 그 자리에 값이 들어갑니다. 정수는 최소·최대 범위를 벗어나면 빨간색으로 표시됩니다.</p>
     </div>
     <div class="card" style="margin-top:20px">
       <h2>특수변수</h2>
@@ -262,7 +260,7 @@
         <thead><tr><th>변수</th><th>이름</th><th>동작</th><th>설정</th></tr></thead>
         <tbody id="specialRows"></tbody>
       </table>
-      <p class="muted">특수변수는 이름을 바꾸거나 삭제할 수 없습니다. 양식에는 일반 변수처럼 <b>(글자)</b>로 넣습니다.</p>
+      <p class="muted">특수변수는 이름을 바꾸거나 삭제할 수 없습니다. 양식에는 일반 변수처럼 <b>(변수)</b>로 넣습니다.</p>
     </div>
   </section>
 </main>
