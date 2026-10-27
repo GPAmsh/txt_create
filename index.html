@@ -942,12 +942,13 @@ function buildColumn(rand, hol) {
   const gen = allowedDates(hol);
   const pick = repPicker(rand);
   if (cfg.skipOn) {
-    // 건너뛰기: 매 줄마다 건너뛰기 일수만큼 달력으로 뒤로 가고, 그날이 제외일이면 다음 가능한 날로 밂
-    // 묶음이 끝나도 이어서 진행 (예: 10/26 시작, 2일, 주말 제외 → 10/26, 10/28, 10/30, 11/2, 11/4 …)
+    // 건너뛰기: 한 날짜를 반복 횟수만큼 적은 뒤, 다음 날짜는 건너뛰기 일수만큼 달력으로 뒤로 감 (제외일이면 다음 가능한 날로 밂)
+    // 예: 10/26 시작, 반복 2, 건너뛰기 2 → 10/26, 10/26, 10/28, 10/28, 10/30, 10/30 …
     const { value: first } = gen.next();
     let cur = first;
     while (cur && col.length < cfg.rows) {
-      col.push(cur);
+      const times = pick();
+      for (let i = 0; i < times && col.length < cfg.rows; i++) col.push(cur);
       cur = new Date(cur); cur.setDate(cur.getDate() + cfg.skip); cur = nextAllowed(cur, hol);
     }
     return col;
