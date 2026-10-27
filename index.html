@@ -49,6 +49,8 @@
   .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .spacer { flex: 1; }
   .output { white-space: pre-wrap; word-break: break-all; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 12px; min-height: 220px; }
+  .output.editable { cursor: text; }
+  .output.editable:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   .output .url { color: var(--accent); text-decoration: underline dotted; cursor: pointer; }
   .output mark { background: var(--danger-soft); color: var(--danger); border-radius: 3px; padding: 0 2px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
@@ -251,6 +253,14 @@
       </div>
       <p class="muted">양식에서 <b>(a)</b>처럼 괄호 안에 변수 글자를 쓰면 그 자리에 값이 들어갑니다. 정수는 최소·최대 범위를 벗어나면 빨간색으로 표시됩니다.</p>
     </div>
+    <div class="card" style="margin-top:20px">
+      <h2>특수변수</h2>
+      <table>
+        <thead><tr><th>변수</th><th>이름</th><th>동작</th><th>설정</th></tr></thead>
+        <tbody id="specialRows"></tbody>
+      </table>
+      <p class="muted">특수변수는 이름을 바꾸거나 삭제할 수 없습니다. 양식에는 일반 변수처럼 <b>(글자)</b>로 넣습니다.</p>
+    </div>
   </section>
 </main>
 <div class="toast" id="toast"></div>
@@ -261,6 +271,11 @@ const MAX_VARS = 20, MAX_SLOTS = 18;
 const KEYS = 'abcdefghijklmnopqrst'.split('');
 const TYPES = { url: 'URL', text: '문자열', multiline: '여러 줄 문자열', int: '정수' };
 const TRANSFER = '이관여부'; // 특수변수: 문구 만들기에서 체크하면 변수 설정에 적어 둔 문자열이 들어감
+const ATTACH = '첨부파일'; // 특수변수: 시트 열 연결이 '안 씀'이고 값이 비어 있으면 그 줄을 결과에서 지움
+const isAttach = v => !!v.special && v.kind === 'attach';
+const isTransfer = v => !!v.special && v.kind !== 'attach';
+const transferVar = () => state.vars.find(isTransfer);
+const attachVar = () => state.vars.find(isAttach);
 
 // 저장값이 없을 때 쓰는 기본 설정. 파일은 공개되므로 양식·문구·열 연결은 넣지 않음 (백업 불러오기로 채움)
 const defaults = () => ({
@@ -271,7 +286,7 @@ const defaults = () => ({
     { key: 'd', label: '주문수량', type: 'int', min: 1, max: 2000 },
     { key: 'e', label: '데일리캡', type: 'int', min: 1, max: 2000 },
     { key: 'f', label: '공유시트 주소', type: 'url' },
-    { key: 'g', label: '첨부파일', type: 'url' },
+    { key: 'g', label: ATTACH, type: 'url', special: true, kind: 'attach' },
     { key: 'h', label: '주문번호', type: 'text' },
     { key: 'i', label: '경로', type: 'text' },
     { key: 'j', label: '고객', type: 'text' },
@@ -293,7 +308,10 @@ function sanitize(s) {
   const vars = (Array.isArray(s.vars) ? s.vars : []).filter(v => v && /^[a-t]$/.test(v.key) && !seen.has(v.key) && seen.add(v.key)).slice(0, MAX_VARS).map(v => {
     const o = { key: v.key, label: str(v.label).slice(0, 100) || `변수 ${v.key}`, type: TYPES[v.type] ? v.type : 'text' };
     if (o.type === 'int') { o.min = intOr(v.min, 1); o.max = intOr(v.max, 10000); }
-    if (v.special === true) Object.assign(o, { type: 'text', special: true, text: str(v.text) });
+    if (v.special === true) {
+      delete o.min; delete o.max;
+      Object.assign(o, v.kind === 'attach' ? { type: 'url', special: true, kind: 'attach' } : { type: 'text', special: true, text: str(v.text) });
+    }
     return o;
   });
   const keys = new Set(vars.map(v => v.key));
@@ -323,11 +341,18 @@ function normalize(s) {
   s.pasteSlots ||= [s.slot, null, null, null, null];
   s.pasteText ||= '';
   // 특수변수 '이관여부': 없으면 같은 이름의 변수를 특수변수로 바꾸거나 빈 글자로 새로 만듦
-  if (!s.vars.some(v => v.special)) {
-    const same = s.vars.find(v => v.label.trim() === TRANSFER);
+  if (!s.vars.some(isTransfer)) {
+    const same = s.vars.find(v => !v.special && v.label.trim() === TRANSFER);
     const key = KEYS.find(k => !s.vars.some(v => v.key === k));
     if (same) Object.assign(same, { type: 'text', special: true, text: same.text ?? '' });
     else if (key) { s.vars.push({ key, label: TRANSFER, type: 'text', special: true, text: '' }); s.vars.sort((x, y) => x.key.localeCompare(y.key)); }
+  }
+  // 특수변수 '첨부파일': 같은 이름의 변수를 특수변수로 바꾸거나 새로 만듦
+  if (!s.vars.some(isAttach)) {
+    const same = s.vars.find(v => !v.special && v.label.trim() === ATTACH);
+    const key = KEYS.find(k => !s.vars.some(v => v.key === k));
+    if (same) { Object.assign(same, { type: 'url', special: true, kind: 'attach' }); delete same.min; delete same.max; }
+    else if (key) { s.vars.push({ key, label: ATTACH, type: 'url', special: true, kind: 'attach' }); s.vars.sort((x, y) => x.key.localeCompare(y.key)); }
   }
   return s;
 }
@@ -379,7 +404,7 @@ const isDash = s => /^[-‐‑‒–—―−－﹣ㅡ]$/.test(s.replace(/[\s​
 const TRANSFER_QTY = ['주문수량', '총주문수량', '진행건수', '세팅수량'];
 const validTransferN = s => /^\d+$/.test(String(s ?? '').trim()) && +s >= 1 && +s <= 2000;
 function transferN() {
-  const v = state.vars.find(x => x.special);
+  const v = transferVar();
   return v && state.values[v.key] && validTransferN(state.transferN) ? +state.transferN : 0;
 }
 // 이관 체크 시 숫자인 데일리캡이 이관 후 주문수량보다 크면 주문수량으로 맞춤, 아니면 그대로 (주문수량이 숫자가 아니면 그대로)
@@ -389,7 +414,7 @@ function capToOrderQty(cap) {
 }
 // 문구에 실제로 들어갈 값
 function valueOf(v) {
-  if (v.special) return state.values[v.key] ? `\n${v.text ?? ''}\n` : ''; // 체크 시 앞뒤로 줄바꿈
+  if (isTransfer(v)) return state.values[v.key] ? `\n${v.text ?? ''}\n` : ''; // 체크 시 앞뒤로 줄바꿈
   let val = rawOf(v);
   // 데일리캡이 '건'으로 끝나면 마지막 '건'은 뺌 (예: 2일1건 → 2일1, 양식의 '(e)건'과 겹치지 않게)
   if (v.label.trim() === DAILY_CAP) val = val.trim().replace(/건$/, '');
@@ -412,11 +437,11 @@ function valueOf(v) {
 
 // 양식에 값 채우기. html=true면 오류를 표시. 값이 없는 변수 자리는 경고 없이 비워 둠
 function render(body, html) {
-  // '첨부파일' 변수가 시트 열 연결에서 '안 씀' 상태이면,
+  // 특수변수 '첨부파일'이 시트 열 연결에서 '안 씀'이고 직접 입력한 값도 없으면,
   // 해당 변수가 포함된 줄(예: '첨부파일: (g)')을 그 바로 앞의 줄바꿈까지 결과에서 제거한다.
   // (첫 줄이라 앞에 줄바꿈이 없으면 뒤의 줄바꿈을 지움)
-  const attachmentVar = state.vars.find(v => v.label.trim() === '첨부파일');
-  if (attachmentVar && (state.colMap[attachmentVar.key] == null || state.colMap[attachmentVar.key] === '')) {
+  const attachmentVar = attachVar();
+  if (attachmentVar && (state.colMap[attachmentVar.key] == null || state.colMap[attachmentVar.key] === '') && !rawOf(attachmentVar).trim()) {
     const key = attachmentVar.key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const line = '[^\\n]*\\(' + key + '\\)[^\\n]*';
     body = body.replace(new RegExp('\\n' + line, 'g'), '').replace(new RegExp('^' + line + '\\n?'), '');
@@ -470,7 +495,7 @@ function renderMake() {
   const used = usedKeys(body);
   const focused = document.activeElement?.dataset?.key;
   $('makeInputs').innerHTML = state.vars.map(v => {
-    if (v.special) return ''; // 이관여부는 결과 옆 체크박스로 입력
+    if (isTransfer(v)) return ''; // 이관여부는 결과 옆 체크박스로 입력
     const val = state.values[v.key] ?? '';
     const err = check(v, valueOf(v));
     const attrs = `data-key="${v.key}" class="${err ? 'bad' : ''}"`;
@@ -496,14 +521,14 @@ function renderMake() {
 }
 // 이관여부 체크박스 (문구 만들기 결과 옆, 시트 붙여넣기 양식 선택 옆) — 같은 값을 공유
 function syncTransfer() {
-  const v = state.vars.find(x => x.special);
+  const v = transferVar();
   document.querySelectorAll('input.transfer').forEach(el => {
     el.parentElement.hidden = !v;
     if (v) { el.checked = !!state.values[v.key]; el.parentElement.title = `(${v.key}) 체크하면 "${v.text ?? ''}" 출력`; }
   });
   const n = state.transferN ?? '';
   document.querySelectorAll('input.transferN').forEach(el => {
-    el.hidden = !state.vars.some(x => x.special);
+    el.hidden = !transferVar();
     if (document.activeElement !== el) el.value = n;
     el.classList.toggle('bad', n !== '' && !validTransferN(n));
   });
@@ -513,7 +538,7 @@ document.querySelectorAll('input.transferN').forEach(el => el.oninput = () => {
   save(); syncTransfer(); renderOutput(); renderPaste();
 });
 document.querySelectorAll('input.transfer').forEach(el => el.onchange = () => {
-  const v = state.vars.find(x => x.special);
+  const v = transferVar();
   if (!v) return;
   state.values[v.key] = el.checked ? '1' : '';
   save(); syncTransfer(); renderOutput(); renderPaste();
@@ -528,6 +553,9 @@ $('clearValues').onclick = () => { if (confirm('입력값을 모두 지울까요
 async function copySlot(i) {
   const { text, problems } = render(state.slots[i].body, false);
   if (problems.length && !confirm('확인이 필요한 값이 있습니다:\n' + problems.join('\n') + '\n\n그래도 복사할까요?')) return;
+  await copyText(text);
+}
+async function copyText(text) {
   try { await navigator.clipboard.writeText(text); }
   catch { const t = document.createElement('textarea'); t.value = text; document.body.append(t); t.select(); document.execCommand('copy'); t.remove(); }
   toast('복사했습니다');
@@ -576,18 +604,33 @@ function renderPaste() {
 
   const mapped = Object.values(state.colMap).filter(x => x != null && x !== '').map(Number);
   const nCols = Math.max(cells.length, 10, ...mapped.map(x => x + 1));
-  $('mapRows').innerHTML = state.vars.filter(v => !v.special).map(v => {
+  // 특수변수 첨부파일을 맨 위에 두고, 값은 직접 고칠 수 있는 입력칸으로 보여 줌
+  $('mapRows').innerHTML = [...state.vars.filter(isAttach), ...state.vars.filter(v => !v.special)].map(v => {
     const idx = state.colMap[v.key], val = state.values[v.key] ?? '', shown = valueOf(v), err = check(v, shown);
     const opts = ['<option value="">— 안 씀 —</option>'].concat(Array.from({ length: nCols }, (_, i) =>
       `<option value="${i}" ${String(idx) === String(i) ? 'selected' : ''}>${colName(i)}: ${esc(i < cells.length ? short(cells[i].trim() || '(빈칸)') : '')}</option>`));
+    const valCell = isAttach(v)
+      ? `<td class="val"><input data-val="${v.key}" class="${err ? 'bad' : ''}" value="${esc(val)}" placeholder="직접 입력 (https://...)"><div class="err">${err}</div></td>`
+      : `<td class="val ${err ? 'err' : ''}">${esc(short(val, 60)) || '<span class="muted">비어 있음</span>'}${shown !== val ? ` → ${esc(short(shown, 60)) || '(빈 값)'}` : ''}${err ? '<br>' + err : ''}</td>`;
     return `<tr><td class="key">(${v.key})</td>
-      <td><select data-key="${v.key}">${opts.join('')}</select><div class="muted">${esc(v.label)} · ${TYPES[v.type]}</div></td>
-      <td class="val ${err ? 'err' : ''}">${esc(short(val, 60)) || '<span class="muted">비어 있음</span>'}${shown !== val ? ` → ${esc(short(shown, 60)) || '(빈 값)'}` : ''}${err ? '<br>' + err : ''}</td></tr>`;
+      <td><select data-key="${v.key}">${opts.join('')}</select><div class="muted">${esc(v.label)} · ${isAttach(v) ? '특수변수 · ' : ''}${TYPES[v.type]}</div></td>
+      ${valCell}</tr>`;
   }).join('');
   $('mapRows').querySelectorAll('select').forEach(sel => sel.onchange = () => {
-    if (sel.value === '') delete state.colMap[sel.dataset.key];
-    else state.colMap[sel.dataset.key] = +sel.value;
+    if (sel.value === '') {
+      delete state.colMap[sel.dataset.key];
+      if (isAttach(varOf(sel.dataset.key))) state.values[sel.dataset.key] = ''; // 안 씀으로 바꾸면 예전 셀 값은 비움
+    } else state.colMap[sel.dataset.key] = +sel.value;
     applyPaste(); renderPaste();
+  });
+  $('mapRows').querySelectorAll('[data-val]').forEach(el => el.oninput = () => {
+    const v = varOf(el.dataset.val);
+    state.values[v.key] = el.value;
+    save();
+    const err = check(v, valueOf(v));
+    el.classList.toggle('bad', !!err);
+    el.nextElementSibling.textContent = err;
+    renderPasteOut();
   });
 
   $('pasteSlotSel').innerHTML = state.pasteSlots.map((cur, n) => `<select data-n="${n}"><option value="">${n + 1}번: 없음</option>${
@@ -598,13 +641,36 @@ function renderPaste() {
   });
 
   syncTransfer();
+  renderPasteOut();
+}
+
+// 표시할 양식의 결과는 직접 고칠 수 있음. 고친 내용은 원래 결과가 바뀌기 전까지(새 붙여넣기·값 변경 등) 유지되고, 복사도 고친 내용으로 함
+const pasteEdits = {};
+function renderPasteOut() {
   const shown = state.pasteSlots.filter(i => i != null && state.slots[i]?.body);
   $('pasteOut').innerHTML = shown.length ? shown.map(i => {
     const { text, problems } = render(state.slots[i].body, true);
-    return `<div class="result"><h3>${esc(slotTitle(state.slots[i], i))}<span class="spacer"></span><button class="btn primary" data-copy="${i}">복사</button></h3>
-      <div class="output">${text}</div><div class="err">${problems.map(esc).join('<br>')}</div></div>`;
+    const base = render(state.slots[i].body, false).text;
+    if (pasteEdits[i] && pasteEdits[i].base !== base) delete pasteEdits[i];
+    const ed = pasteEdits[i];
+    return `<div class="result"><h3>${esc(slotTitle(state.slots[i], i))}<span class="dirty" data-mark="${i}">${ed ? '● 직접 고침' : ''}</span><span class="spacer"></span>
+      <button class="btn" data-reset="${i}" ${ed ? '' : 'hidden'}>되돌리기</button><button class="btn primary" data-copy="${i}">복사</button></h3>
+      <div class="output editable" data-edit="${i}" spellcheck="false" title="클릭해서 직접 고칠 수 있습니다">${ed ? linkify(ed.text) : text}</div><div class="err">${problems.map(esc).join('<br>')}</div></div>`;
   }).join('') : '<p class="muted">위에서 표시할 양식을 고르세요</p>';
-  $('pasteOut').querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copySlot(+b.dataset.copy));
+  $('pasteOut').querySelectorAll('[data-edit]').forEach(el => {
+    try { el.contentEditable = 'plaintext-only'; } catch { el.contentEditable = 'true'; } // 붙여넣을 때 서식은 빼고 글자만
+    el.oninput = () => {
+      const i = +el.dataset.edit;
+      pasteEdits[i] = { base: render(state.slots[i].body, false).text, text: el.innerText };
+      $('pasteOut').querySelector(`[data-mark="${i}"]`).textContent = '● 직접 고침';
+      $('pasteOut').querySelector(`[data-reset="${i}"]`).hidden = false;
+    };
+  });
+  $('pasteOut').querySelectorAll('[data-reset]').forEach(b => b.onclick = () => { delete pasteEdits[+b.dataset.reset]; renderPasteOut(); });
+  $('pasteOut').querySelectorAll('[data-copy]').forEach(b => b.onclick = () => {
+    const i = +b.dataset.copy;
+    if (pasteEdits[i]) copyText(pasteEdits[i].text); else copySlot(i);
+  });
 }
 $('pasteIn').oninput = () => { state.pasteText = $('pasteIn').value; applyPaste(); renderPaste(); };
 $('pasteClear').onclick = () => { state.pasteText = ''; save(); $('pasteIn').value = ''; renderPaste(); };
@@ -658,19 +724,22 @@ $('tplClear').onclick = () => {
 function renderVars() {
   $('varCount').textContent = `${state.vars.length} / ${MAX_VARS}`;
   $('addVar').disabled = state.vars.length >= MAX_VARS;
-  $('varRows').innerHTML = state.vars.map((v, i) => v.special ? `<tr data-i="${i}">
+  // 특수변수(이관여부, 첨부파일)는 아래 '특수변수' 표에서 따로 관리
+  $('specialRows').innerHTML = state.vars.map((v, i) => !v.special ? '' : `<tr data-i="${i}">
     <td class="key">(${v.key})</td>
-    <td><input value="${esc(v.label)}" disabled></td>
-    <td class="muted">특수변수<br>(체크 시 출력)</td>
-    <td colspan="2"><input data-f="text" value="${esc(v.text ?? '')}" placeholder="체크하면 출력할 문자열"></td>
-    <td></td></tr>` : `<tr data-i="${i}">
+    <td style="white-space:nowrap"><b>${esc(v.label)}</b></td>
+    <td class="muted">${isAttach(v)
+      ? '주소(URL). 시트 붙여넣기에서 열을 연결하거나 직접 입력. 열 연결이 \'안 씀\'이고 값이 비어 있으면 그 줄을 결과에서 지움'
+      : '문구 만들기·시트 붙여넣기의 체크박스로 켬. 체크하면 오른쪽 문자열을 앞뒤 줄바꿈과 함께 출력하고, 주문수량 등에서 이관 수량을 뺌'}</td>
+    <td style="width:40%">${isAttach(v) ? '<span class="muted">값은 시트 붙여넣기 탭에서 입력</span>' : `<input data-f="text" value="${esc(v.text ?? '')}" placeholder="체크하면 출력할 문자열">`}</td></tr>`).join('');
+  $('varRows').innerHTML = state.vars.map((v, i) => v.special ? '' : `<tr data-i="${i}">
     <td class="key">(${v.key})</td>
     <td><input data-f="label" value="${esc(v.label)}"></td>
     <td><select data-f="type">${Object.entries(TYPES).map(([k, n]) => `<option value="${k}" ${k === v.type ? 'selected' : ''}>${n}</option>`).join('')}</select></td>
     <td>${v.type === 'int' ? `<input type="number" data-f="min" value="${v.min ?? 1}">` : ''}</td>
     <td>${v.type === 'int' ? `<input type="number" data-f="max" value="${v.max ?? 10000}">` : ''}</td>
     <td><button class="btn danger" data-del>삭제</button></td></tr>`).join('');
-  $('varRows').querySelectorAll('tr').forEach(tr => {
+  document.querySelectorAll('#varRows tr, #specialRows tr').forEach(tr => {
     const v = state.vars[+tr.dataset.i];
     tr.querySelectorAll('[data-f]').forEach(el => el.onchange = () => {
       const f = el.dataset.f;
