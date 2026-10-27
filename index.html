@@ -38,6 +38,7 @@
   input, select, textarea { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
   textarea { resize: vertical; min-height: 220px; font-family: inherit; }
   input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  input:disabled { opacity: .45; cursor: not-allowed; }
   .bad { border-color: var(--danger) !important; background: var(--danger-soft) !important; }
   .err { color: var(--danger); font-size: 12px; }
   .unused { opacity: .45; }
@@ -165,7 +166,9 @@
       <label class="field"><span>반복 횟수 (최소 ~ 최대, 같으면 고정)</span>
         <div class="pair"><input type="number" id="dl-repMin" min="1" max="100"><span>~</span><input type="number" id="dl-repMax" min="1" max="100"></div>
       </label>
-      <label class="field"><span>건너뛰기 (며칠 간격으로 이어서, 0이면 같은 날짜 반복)</span><input type="number" id="dl-skip" min="0" max="100"></label>
+      <div class="field" style="margin-bottom:10px"><span class="muted" style="display:block;font-size:13px;margin-bottom:3px">건너뛰기 (며칠 간격으로 이어서, 사용 안 하면 같은 날짜 반복)</span>
+        <div class="row" style="flex-wrap:nowrap"><label class="tchk"><input type="checkbox" id="dl-skipOn">사용함</label><input type="number" id="dl-skip" min="2" max="100" placeholder="2 이상"></div>
+      </div>
       <label class="field"><span>날짜 형식</span>
         <select id="dl-fmt">
           <option value="dot">2026. 1. 5</option>
@@ -865,9 +868,15 @@ const DEFAULT_HOLIDAYS = `
 const pad = n => String(n).padStart(2, '0');
 const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-const defaults = { start: iso(new Date()), rows: 6, repMin: 1, repMax: 1, skip: 0, fmt: 'dot', exSat: false, exSun: false, exHol: false, hol: DEFAULT_HOLIDAYS };
+const defaults = { start: iso(new Date()), rows: 6, repMin: 1, repMax: 1, skipOn: false, skip: 2, fmt: 'dot', exSat: false, exSun: false, exHol: false, hol: DEFAULT_HOLIDAYS };
 let cfg = { ...defaults };
-try { Object.assign(cfg, JSON.parse(localStorage.getItem(STORE_KEY)) || {}); } catch {}
+try {
+  const saved = JSON.parse(localStorage.getItem(STORE_KEY)) || {};
+  // 예전 버전(체크박스 없이 숫자만)에서 2 이상을 쓰고 있었으면 '사용함'으로 이어받음
+  if (saved.skipOn === undefined && saved.skip >= 2) saved.skipOn = true;
+  if (!(saved.skip >= 2)) delete saved.skip;
+  Object.assign(cfg, saved);
+} catch {}
 const persist = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(cfg)); } catch {} };
 
 let seed = Date.now() >>> 0;
@@ -932,7 +941,7 @@ function buildColumn(rand, hol) {
   const col = [];
   const gen = allowedDates(hol);
   const pick = repPicker(rand);
-  if (cfg.skip > 0) {
+  if (cfg.skipOn) {
     // 건너뛰기: 매 줄마다 건너뛰기 일수만큼 달력으로 뒤로 가고, 그날이 제외일이면 다음 가능한 날로 밂
     // 묶음이 끝나도 이어서 진행 (예: 10/26 시작, 2일, 주말 제외 → 10/26, 10/28, 10/30, 11/2, 11/4 …)
     const { value: first } = gen.next();
@@ -959,7 +968,10 @@ function generate() {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(cfg.start)) err.push('시작 날짜를 입력하세요');
   if (!(cfg.rows >= 1 && cfg.rows <= 5000)) err.push('행 개수는 1~5000');
   if (!(cfg.repMin >= 1 && cfg.repMax >= cfg.repMin && cfg.repMax <= 100)) err.push('반복 횟수는 1~100, 최소 ≤ 최대');
-  if (!(cfg.skip >= 0 && cfg.skip <= 100)) err.push('건너뛰기는 0~100');
+  // 건너뛰기는 '사용함'일 때만 숫자칸을 쓸 수 있고, 2~100만 허용
+  $('dl-skip').disabled = !cfg.skipOn;
+  $('dl-skip').classList.toggle('bad', cfg.skipOn && !(cfg.skip >= 2 && cfg.skip <= 100));
+  if (cfg.skipOn && !(cfg.skip >= 2 && cfg.skip <= 100)) err.push('건너뛰기는 2~100');
   $('dl-err').textContent = err.join(' / ');
   if (err.length) { $('dl-out').value = ''; $('dl-preview').innerHTML = ''; return; }
 
@@ -986,7 +998,7 @@ function generate() {
 }
 
 // ---------- 입력 연결 ----------
-const fields = ['start', 'rows', 'repMin', 'repMax', 'skip', 'fmt', 'exSat', 'exSun', 'exHol', 'hol'];
+const fields = ['start', 'rows', 'repMin', 'repMax', 'skipOn', 'skip', 'fmt', 'exSat', 'exSun', 'exHol', 'hol'];
 for (const f of fields) {
   const el = $('dl-' + f);
   if (el.type === 'checkbox') el.checked = cfg[f]; else el.value = cfg[f];
