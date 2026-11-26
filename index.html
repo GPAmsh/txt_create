@@ -9,6 +9,7 @@
 <title>문구 생성기</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/manuscript-sync.css">
+<link rel="stylesheet" href="css/tools.css">
 </head>
 <body>
 <header>
@@ -20,6 +21,8 @@
     <button data-tab="date">날짜 목록</button>
     <button data-tab="tpl">양식 편집</button>
     <button data-tab="vars">변수 설정</button>
+    <button data-tab="adid">ADID 중복 검사</button>
+    <button data-tab="qty">수치 대조</button>
   </nav>
 </header>
 <main>
@@ -118,10 +121,151 @@
   <section class="tab" id="tab-tpl"><div class="card"><h2>저장 슬롯 (1~18)</h2><div class="slots" id="slotList"></div><div class="grid"><div><label class="field"><span>슬롯 <b id="tplNo"></b> 이름</span><input id="tplName" placeholder="예: 주문 준비 안내"></label><div class="muted mb-4">클릭하면 커서 위치에 변수가 들어갑니다</div><div class="chips" id="tplChips"></div><label class="field"><textarea id="tplBody" placeholder="안녕하세요!~ 주문하신 (c) 준비되었습니다.&#10;총주문수량: (d)"></textarea></label><div class="row"><button class="btn primary" id="tplSave">저장</button><button class="btn" id="tplRevert">되돌리기</button><span class="dirty" id="tplDirty"></span><span class="spacer"></span><button class="btn danger" id="tplClear">슬롯 비우기</button></div></div><div><div class="muted mb-4">미리보기 (현재 입력값 기준)</div><div class="output" id="tplPreview"></div></div></div></div></section>
   <!-- 변수 설정 -->
   <section class="tab" id="tab-vars"><div class="card"><h2>변수 목록 <span class="muted" id="varCount"></span></h2><table><thead><tr><th>변수</th><th>이름(설명)</th><th>종류</th><th>최소</th><th>최대</th><th></th></tr></thead><tbody id="varRows"></tbody></table><div class="row mt-12"><button class="btn" id="addVar">+ 변수 추가</button><span class="spacer"></span><button class="btn" id="exportData">백업 파일로 내보내기</button><button class="btn" id="importData">백업 불러오기</button><input type="file" id="importFile" accept=".json" hidden></div></div><div class="card mt-20"><h2>특수변수</h2><table><thead><tr><th>변수</th><th>이름</th><th>동작</th><th>설정</th></tr></thead><tbody id="specialRows"></tbody></table><p class="muted">특수변수는 이름을 바꾸거나 삭제할 수 없습니다. 양식에는 일반 변수처럼 <b>(변수)</b>로 넣습니다.</p></div></section>
+  <!-- ADID 중복 검사 (js/adid-check.js, 처음 열 때 불러옴) -->
+  <section class="tab" id="tab-adid">
+    <div class="tload" id="adid-loading">탭을 열면 불러옵니다</div>
+    <div class="hidden" id="adid-ui">
+  <h2 class="ttl">ADID 중복 검사</h2>
+  <p class="sub">여러 엑셀(.xlsx) 파일의 ADID를 모아 중복을 찾습니다. 파일은 이 브라우저 안에서만 분석되며 외부로 전송되지 않습니다.</p>
+
+  <section class="panel">
+    <h2><span class="num">1</span>파일 올리기</h2>
+    <div class="drop" id="adid-drop" tabindex="0" role="button" aria-label="엑셀 파일 선택">
+      <div><strong>.xlsx 파일을 여기에 끌어 놓거나 클릭해서 선택</strong></div>
+      <div class="hint">여러 파일을 한 번에 선택할 수 있습니다</div>
+    </div>
+    <input type="file" id="adid-fileInput" accept=".xlsx" multiple class="hidden">
+    <div id="adid-addNotice" class="notice hidden"></div>
+    <div class="row filebar">
+      <span class="count grow" id="adid-fileCount">올린 파일 없음</span>
+      <button type="button" id="adid-clearBtn" disabled>전체 초기화</button>
+    </div>
+    <table class="files">
+      <thead><tr><th class="w44">#</th><th>파일명</th><th class="num size w90">크기</th><th class="w150">상태</th><th class="w70"></th></tr></thead>
+      <tbody id="adid-fileRows"><tr><td colspan="5" class="empty">아직 올린 파일이 없습니다</td></tr></tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2><span class="num">2</span>검사</h2>
+    <div class="row actions">
+      <div>
+        <label class="chk"><input type="checkbox" id="adid-caseSensitive"> 대소문자 구분</label>
+        <div class="crit">기본값은 대소문자를 구분하지 않고(abc = ABC), 앞뒤 공백을 지운 뒤 비교합니다.<br>
+          찾는 열 제목: <code>ADID (구글 광고 ID / 기기식별값)</code>, <code>date</code> (열 위치·제목 행 위치는 상관없음)</div>
+      </div>
+      <button type="button" class="primary" id="adid-runBtn" disabled>중복 검사</button>
+    </div>
+  </section>
+
+  <section class="panel hidden" id="adid-issuesPanel">
+    <h2>확인이 필요한 파일</h2>
+    <div class="issues" id="adid-issues"></div>
+  </section>
+
+  <section class="panel hidden" id="adid-resultPanel">
+    <h2><span class="num">3</span>결과</h2>
+    <div id="adid-stale" class="stale hidden">파일 목록이나 비교 기준이 바뀌었습니다. 최신 결과를 보려면 [중복 검사]를 다시 누르세요.</div>
+    <div class="stats" id="adid-stats"></div>
+    <div class="row tools">
+      <input type="search" id="adid-search" placeholder="ADID 검색" aria-label="ADID 검색">
+      <select id="adid-sort" aria-label="정렬">
+        <option value="count-desc">중복수 많은 순</option>
+        <option value="count-asc">중복수 적은 순</option>
+        <option value="date-asc">날짜 오래된 순</option>
+        <option value="date-desc">날짜 최신 순</option>
+        <option value="adid-asc">ADID 순</option>
+      </select>
+      <span class="grow"></span>
+      <button type="button" id="adid-exportBtn" disabled>엑셀로 내보내기</button>
+    </div>
+    <div id="adid-resultBody"></div>
+  </section>
+    </div>
+  </section>
+  <!-- 수치 대조 (js/qty-compare.js, 처음 열 때 불러옴) -->
+  <section class="tab" id="tab-qty">
+    <div class="tload" id="qty-loading">탭을 열면 불러옵니다</div>
+    <div class="hidden" id="qty-ui">
+  <h2 class="ttl">날짜별 수치 대조</h2>
+  <p class="sub">진행전 수치에 날짜별 증가량을 누적해 기준 데이터와 비교합니다. 파일은 이 브라우저 안에서만 읽으며 외부로 전송되지 않고, 원본 파일은 수정하지 않습니다.</p>
+
+  <section class="panel">
+    <h2><span class="num">1</span>진행전 수치</h2>
+    <div class="grid4">
+      <div class="field"><label for="qty-baseDate">기준 날짜</label><input type="date" id="qty-baseDate"></div>
+      <div class="field"><label for="qty-preOrder">주문수량</label><input type="number" id="qty-preOrder" step="any" inputmode="decimal" placeholder="예: 150"></div>
+      <div class="field"><label for="qty-preSetting">세팅수량</label><input type="number" id="qty-preSetting" step="any" inputmode="decimal" placeholder="예: 180"></div>
+      <div class="field"><label for="qty-preDone">완료수량</label><input type="number" id="qty-preDone" step="any" inputmode="decimal" placeholder="예: 180"></div>
+    </div>
+    <div class="help">진행전 수치 = 기준 날짜가 <b>시작될 때</b>의 수치입니다. 기준 날짜 <b>당일 증가량부터</b> 누적하고, 기준 날짜 이전 증가량은 계산에서 뺍니다.</div>
+  </section>
+
+  <section class="panel">
+    <h2><span class="num">2</span>파일 올리기</h2>
+    <div class="uploads">
+      <div>
+        <div class="drop" id="qty-dropBase" data-kind="base" tabindex="0" role="button">
+          <div><strong>기준 데이터 .xlsx</strong></div>
+          <div class="hint">날짜 · 소진량 · 주문수량 · 세팅수량 · 완료수량<br>끌어 놓거나 클릭해서 선택 (여러 개 가능)</div>
+        </div>
+        <div class="flist" id="qty-listBase"></div>
+      </div>
+      <div>
+        <div class="drop" id="qty-dropInc" data-kind="inc" tabindex="0" role="button">
+          <div><strong>날짜별 증가량 .xlsx</strong></div>
+          <div class="hint">날짜 · 주문 · 세팅 · 완료 증가량<br>끌어 놓거나 클릭해서 선택 (여러 개 가능)</div>
+        </div>
+        <div class="flist" id="qty-listInc"></div>
+      </div>
+    </div>
+    <input type="file" id="qty-fileInput" accept=".xlsx" multiple class="hidden">
+    <div id="qty-addNotice" class="alert err hidden"></div>
+    <div class="help">열 위치·제목 행 위치는 상관없이 <b>열 제목</b>으로 찾습니다. 날짜: <code>날짜·일자·date</code> / 소진량: <code>소진</code> 포함 / 주문·세팅·완료: 각 낱말 포함 (증가량 파일에서는 <code>누적</code>이 들어간 열은 쓰지 않음). 자동으로 못 찾거나 잘못 찾으면 파일 아래 선택 상자에서 직접 고르세요.</div>
+  </section>
+
+  <section class="panel">
+    <div class="row">
+      <button type="button" class="primary" id="qty-runBtn">데이터 비교 시작</button>
+      <button type="button" id="qty-clearBtn">전체 초기화</button>
+      <span class="grow"></span>
+      <button type="button" id="qty-exportBtn" disabled>Excel 다운로드</button>
+    </div>
+    <div id="qty-runMsg" class="alert err hidden"></div>
+  </section>
+
+  <section class="panel hidden" id="qty-resultPanel">
+    <h2><span class="num">3</span>결과</h2>
+    <div class="stats" id="qty-stats"></div>
+    <div id="qty-notes"></div>
+    <div class="tabs" role="tablist">
+      <button type="button" class="qtab" role="tab" data-qtab="t1" aria-selected="true">수치 대조 결과</button>
+      <button type="button" class="qtab" role="tab" data-qtab="t2" aria-selected="false">소진량 비교 결과</button>
+    </div>
+    <div class="row tools">
+      <input type="search" id="qty-search" placeholder="날짜 검색 (예: 10-15)" aria-label="날짜 검색">
+      <select id="qty-statusFilter" aria-label="비교 결과 필터">
+        <option value="">비교 결과 전체</option>
+        <option value="ok">일치만</option>
+        <option value="bad">차이만</option>
+        <option value="na">비교 불가만</option>
+      </select>
+      <select id="qty-itemFilter" aria-label="항목 필터">
+        <option value="">항목 전체</option>
+        <option value="order">주문수량</option>
+        <option value="setting">세팅수량</option>
+        <option value="done">완료수량</option>
+      </select>
+    </div>
+    <div id="qty-tableBody"></div>
+  </section>
+    </div>
+  </section>
 </main>
 <div class="toast" id="toast"></div>
 <script src="js/app.js"></script>
 <script src="js/date-list.js"></script>
 <script src="js/manuscript-sync.js"></script>
+<script src="js/tools-tabs.js"></script>
 </body>
 </html>
