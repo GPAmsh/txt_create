@@ -2,12 +2,13 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<!-- 보안: 이 사이트의 css/js 파일만 쓰고 인라인 스크립트·외부 이미지·폼 전송을 막고, 데이터 통신은 공휴일 API(date.nager.at)만 허용 -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://date.nager.at; base-uri 'none'; form-action 'none'; object-src 'none'">
+<!-- 보안: 자체 파일 및 공휴일 API 통신 허용 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://date.nager.at; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>문구 생성기</title>
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/manuscript-sync.css">
 </head>
 <body>
 <header>
@@ -15,12 +16,12 @@
   <nav>
     <button data-tab="make" class="on">문구 만들기</button>
     <button data-tab="paste">시트 붙여넣기</button>
+    <button data-tab="manuscript">원고 자동 전달</button>
     <button data-tab="date">날짜 목록</button>
     <button data-tab="tpl">양식 편집</button>
     <button data-tab="vars">변수 설정</button>
   </nav>
 </header>
-
 <main>
   <!-- 문구 만들기 -->
   <section class="tab on" id="tab-make">
@@ -39,7 +40,6 @@
       </div>
     </div>
   </section>
-
   <!-- 시트 붙여넣기 -->
   <section class="tab" id="tab-paste">
     <div class="card mb-20">
@@ -53,18 +53,47 @@
     <div class="grid">
       <div class="card">
         <h2>열 → 변수 연결</h2>
-        <table>
-          <thead><tr><th>변수</th><th>가져올 열</th><th>들어간 값</th></tr></thead>
-          <tbody id="mapRows"></tbody>
-        </table>
+        <table><thead><tr><th>변수</th><th>가져올 열</th><th>들어간 값</th></tr></thead><tbody id="mapRows"></tbody></table>
       </div>
       <div class="card">
         <h2>표시할 양식 (최대 5개) <label class="tchk"><input type="checkbox" class="transfer">이관여부</label><input class="transferN" inputmode="numeric" placeholder="1~2000" title="이관여부 체크 시 주문수량·총주문수량·진행건수·세팅수량에서 뺄 수"></h2>
-        <div class="slot-sel" id="pasteSlotSel"></div>
-        <div class="scrollbox" id="pasteOut"></div>
+        <div class="slot-sel" id="pasteSlotSel"></div><div class="scrollbox" id="pasteOut"></div>
       </div>
     </div>
   </section>
+<!-- 원고 자동 전달: <main> 안, 다른 tab section과 나란히 배치 -->
+<section class="tab" id="tab-manuscript">
+  <div class="card mb-20">
+    <h2>원고 자동 전달 · 시트 한 행 붙여넣기</h2>
+    <p class="muted">스프레드시트에서 한 행을 복사해 붙여넣으세요. 사용할 열을 연결하면 사진 URL·제목·본문을 자동 추출합니다. 첫 번째 행만 전송하며, 전송 전 내용을 수정할 수 있습니다.</p>
+    <textarea id="ms-paste" class="paste-in" placeholder="Google Sheets/Excel에서 한 행을 복사(Ctrl+C)한 뒤 이곳에 붙여넣으세요 (Ctrl+V)"></textarea>
+    <div class="row mt-6"><span class="muted" id="ms-summary"></span><span class="spacer"></span><button class="btn" id="ms-clear">행 데이터 지우기</button></div>
+  </div>
+  <div class="card mb-20">
+    <h2>열 연결 (설정은 현재 브라우저에만 보관)</h2>
+    <div class="ms-options">
+      <label>주문번호 열 <select id="ms-col-orderNo"></select></label>
+      <label>상품명 열 <select id="ms-col-itemName"></select></label>
+      <label>사진파일 주소 열 <select id="ms-col-image"></select></label>
+      <label>원고제목 열 <select id="ms-col-title"></select></label>
+      <label class="ms-full">원고내용 열 <select id="ms-col-content"></select></label>
+    </div>
+    <p class="muted mt-12">기본 설정: D열(주문번호), G열(제목), I열(원고내용), Q열(상품명), AA열(사진 주소). 각 항목을 직접 수정해도 됩니다.</p>
+  </div>
+  <div class="card">
+    <h2>전송할 원고 미리보기</h2>
+    <div class="ms-preview">
+      <label>주문번호 <input id="ms-order" placeholder="주문번호 (필수)"></label>
+      <label>상품명 <input id="ms-item" list="ms-item-values" placeholder="인스타원고포스팅"><datalist id="ms-item-values"><option value="인스타원고포스팅"><option value="스레드원고포스팅"><option value="트위터원고포스팅"><option value="페이스북원고포스팅"><option value="블로그원고포스팅"></datalist></label>
+      <label class="ms-full">사진파일 주소 (여러 개면 줄마다 하나씩)<textarea id="ms-image" placeholder="https://.../photo.jpg"></textarea></label>
+      <label class="ms-full">원고제목 <input id="ms-title" placeholder="원고 제목"></label>
+      <label class="ms-full">원고내용 <textarea id="ms-content" placeholder="원고 본문"></textarea></label>
+      <label class="ms-full">전송 암호 (저장하지 않음) <input type="password" autocomplete="off" id="ms-password" placeholder="Vercel MANUSCRIPT_WEB_PASSWORD 값"></label>
+    </div>
+    <div class="row mt-12"><button class="btn primary" id="ms-send">원고 서버에 전송</button><span class="muted">전송 전에 주문번호와 내용을 다시 확인합니다.</span></div>
+    <div class="ms-status muted" id="ms-status" role="status" aria-live="polite"></div>
+  </div>
+</section>
 
   <!-- 날짜 목록 -->
   <section class="tab" id="tab-date">
@@ -74,111 +103,25 @@
       <h2>설정</h2>
       <label class="field"><span>시작 날짜</span><input type="date" id="dl-start"><div class="err" id="dl-startWarn"></div></label>
       <label class="field"><span>행 개수</span><input type="number" id="dl-rows" min="1" max="5000"></label>
-      <label class="field"><span>반복 횟수 (최소 ~ 최대)</span>
-        <div class="pair"><input type="number" id="dl-repMin" min="1" max="100"><span>~</span><input type="number" id="dl-repMax" min="1" max="100"></div>
-      </label>
-      <div class="field"><span class="field-label">건너뛰기</span>
-        <div class="row nowrap"><label class="tchk"><input type="checkbox" id="dl-skipOn">사용함</label><input type="number" id="dl-skip" min="2" max="100" placeholder="2 이상"></div>
-      </div>
-      <label class="field"><span>날짜 형식</span>
-        <select id="dl-fmt">
-          <option value="dot">2026. 1. 5</option>
-          <option value="dot0">2026. 01. 05</option>
-          <option value="dash">2026-01-05</option>
-          <option value="slash">2026/01/05</option>
-        </select>
-      </label>
-      <div class="checks">
-        <span class="muted">제외할 날</span>
-        <label><input type="checkbox" id="dl-exSat">토요일 제외</label>
-        <label><input type="checkbox" id="dl-exSun">일요일 제외</label>
-        <label><input type="checkbox" id="dl-exHol">공휴일 제외</label>
-      </div>
+      <label class="field"><span>반복 횟수 (최소 ~ 최대)</span><div class="pair"><input type="number" id="dl-repMin" min="1" max="100"><span>~</span><input type="number" id="dl-repMax" min="1" max="100"></div></label>
+      <div class="field"><span class="field-label">건너뛰기</span><div class="row nowrap"><label class="tchk"><input type="checkbox" id="dl-skipOn">사용함</label><input type="number" id="dl-skip" min="2" max="100" placeholder="2 이상"></div></div>
+      <label class="field"><span>날짜 형식</span><select id="dl-fmt"><option value="dot">2026. 1. 5</option><option value="dot0">2026. 01. 05</option><option value="dash">2026-01-05</option><option value="slash">2026/01/05</option></select></label>
+      <div class="checks"><span class="muted">제외할 날</span><label><input type="checkbox" id="dl-exSat">토요일 제외</label><label><input type="checkbox" id="dl-exSun">일요일 제외</label><label><input type="checkbox" id="dl-exHol">공휴일 제외</label></div>
       <div class="err" id="dl-err"></div>
     </div>
-
-    <div class="card">
-      <details>
-        <summary>공휴일 목록 편집</summary>
-        <p class="muted">한 줄에 하나씩 <b>YYYY-MM-DD 이름</b>. 회사 휴무일 등을 직접 추가해도 됩니다. 기본 목록은 2025~2027년(대체·선거일 포함)입니다.</p>
-        <textarea class="hol" id="dl-hol"></textarea>
-        <div class="row mt-8">
-          <button class="btn" id="dl-holReset">기본값으로</button>
-          <button class="btn" id="dl-holFetch">인터넷에서 추가</button>
-        </div>
-        <div class="muted" id="dl-holInfo"></div>
-      </details>
-    </div>
+    <div class="card"><details><summary>공휴일 목록 편집</summary><p class="muted">한 줄에 하나씩 <b>YYYY-MM-DD 이름</b>. 회사 휴무일 등을 직접 추가해도 됩니다. 기본 목록은 2025~2027년(대체·선거일 포함)입니다.</p><textarea class="hol" id="dl-hol"></textarea><div class="row mt-8"><button class="btn" id="dl-holReset">기본값으로</button><button class="btn" id="dl-holFetch">인터넷에서 추가</button></div><div class="muted" id="dl-holInfo"></div></details></div>
   </div>
-
-  <div class="card">
-    <h2>결과 <span class="muted" id="dl-summary"></span><span class="spacer"></span>
-      <button class="btn" id="dl-reroll">다시 섞기</button>
-      <button class="btn primary" id="dl-copy">복사</button>
-    </h2>
-    <textarea class="out" id="dl-out" readonly></textarea>
-    <p class="muted">복사한 뒤 구글 시트 칸 하나를 클릭하고 붙여넣으면 열·행에 맞게 들어갑니다.</p>
-    <div id="dl-preview"></div>
-  </div>
+  <div class="card"><h2>결과 <span class="muted" id="dl-summary"></span><span class="spacer"></span><button class="btn" id="dl-reroll">다시 섞기</button><button class="btn primary" id="dl-copy">복사</button></h2><textarea class="out" id="dl-out" readonly></textarea><p class="muted">복사한 뒤 구글 시트 칸 하나를 클릭하고 붙여넣으면 열·행에 맞게 들어갑니다.</p><div id="dl-preview"></div></div>
     </div>
   </section>
-
   <!-- 양식 편집 -->
-  <section class="tab" id="tab-tpl">
-    <div class="card">
-      <h2>저장 슬롯 (1~18)</h2>
-      <div class="slots" id="slotList"></div>
-      <div class="grid">
-        <div>
-          <label class="field"><span>슬롯 <b id="tplNo"></b> 이름</span><input id="tplName" placeholder="예: 주문 준비 안내"></label>
-          <div class="muted mb-4">클릭하면 커서 위치에 변수가 들어갑니다</div>
-          <div class="chips" id="tplChips"></div>
-          <label class="field"><textarea id="tplBody" placeholder="안녕하세요!~ 주문하신 (c) 준비되었습니다.&#10;총주문수량: (d)"></textarea></label>
-          <div class="row">
-            <button class="btn primary" id="tplSave">저장</button>
-            <button class="btn" id="tplRevert">되돌리기</button>
-            <span class="dirty" id="tplDirty"></span>
-            <span class="spacer"></span>
-            <button class="btn danger" id="tplClear">슬롯 비우기</button>
-          </div>
-        </div>
-        <div>
-          <div class="muted mb-4">미리보기 (현재 입력값 기준)</div>
-          <div class="output" id="tplPreview"></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
+  <section class="tab" id="tab-tpl"><div class="card"><h2>저장 슬롯 (1~18)</h2><div class="slots" id="slotList"></div><div class="grid"><div><label class="field"><span>슬롯 <b id="tplNo"></b> 이름</span><input id="tplName" placeholder="예: 주문 준비 안내"></label><div class="muted mb-4">클릭하면 커서 위치에 변수가 들어갑니다</div><div class="chips" id="tplChips"></div><label class="field"><textarea id="tplBody" placeholder="안녕하세요!~ 주문하신 (c) 준비되었습니다.&#10;총주문수량: (d)"></textarea></label><div class="row"><button class="btn primary" id="tplSave">저장</button><button class="btn" id="tplRevert">되돌리기</button><span class="dirty" id="tplDirty"></span><span class="spacer"></span><button class="btn danger" id="tplClear">슬롯 비우기</button></div></div><div><div class="muted mb-4">미리보기 (현재 입력값 기준)</div><div class="output" id="tplPreview"></div></div></div></div></section>
   <!-- 변수 설정 -->
-  <section class="tab" id="tab-vars">
-    <div class="card">
-      <h2>변수 목록 <span class="muted" id="varCount"></span></h2>
-      <table>
-        <thead><tr><th>변수</th><th>이름(설명)</th><th>종류</th><th>최소</th><th>최대</th><th></th></tr></thead>
-        <tbody id="varRows"></tbody>
-      </table>
-      <div class="row mt-12">
-        <button class="btn" id="addVar">+ 변수 추가</button>
-        <span class="spacer"></span>
-        <button class="btn" id="exportData">백업 파일로 내보내기</button>
-        <button class="btn" id="importData">백업 불러오기</button>
-        <input type="file" id="importFile" accept=".json" hidden>
-      </div>
-    </div>
-    <div class="card mt-20">
-      <h2>특수변수</h2>
-      <table>
-        <thead><tr><th>변수</th><th>이름</th><th>동작</th><th>설정</th></tr></thead>
-        <tbody id="specialRows"></tbody>
-      </table>
-      <p class="muted">특수변수는 이름을 바꾸거나 삭제할 수 없습니다. 양식에는 일반 변수처럼 <b>(변수)</b>로 넣습니다.</p>
-    </div>
-  </section>
+  <section class="tab" id="tab-vars"><div class="card"><h2>변수 목록 <span class="muted" id="varCount"></span></h2><table><thead><tr><th>변수</th><th>이름(설명)</th><th>종류</th><th>최소</th><th>최대</th><th></th></tr></thead><tbody id="varRows"></tbody></table><div class="row mt-12"><button class="btn" id="addVar">+ 변수 추가</button><span class="spacer"></span><button class="btn" id="exportData">백업 파일로 내보내기</button><button class="btn" id="importData">백업 불러오기</button><input type="file" id="importFile" accept=".json" hidden></div></div><div class="card mt-20"><h2>특수변수</h2><table><thead><tr><th>변수</th><th>이름</th><th>동작</th><th>설정</th></tr></thead><tbody id="specialRows"></tbody></table><p class="muted">특수변수는 이름을 바꾸거나 삭제할 수 없습니다. 양식에는 일반 변수처럼 <b>(변수)</b>로 넣습니다.</p></div></section>
 </main>
 <div class="toast" id="toast"></div>
-
 <script src="js/app.js"></script>
 <script src="js/date-list.js"></script>
+<script src="js/manuscript-sync.js"></script>
 </body>
 </html>
