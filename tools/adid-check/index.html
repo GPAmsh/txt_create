@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADID 중복 검사</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>ADID 중복 검사</h1>
+  <p class="sub">여러 엑셀(.xlsx) 파일의 ADID를 모아 중복을 찾습니다. 파일은 이 브라우저 안에서만 분석되며 외부로 전송되지 않습니다.</p>
+
+  <section class="panel">
+    <h2><span class="num">1</span>파일 올리기</h2>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="엑셀 파일 선택">
+      <div><strong>.xlsx 파일을 여기에 끌어 놓거나 클릭해서 선택</strong></div>
+      <div class="hint">여러 파일을 한 번에 선택할 수 있습니다</div>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx" multiple class="hidden">
+    <div id="addNotice" class="notice hidden"></div>
+    <div class="row filebar">
+      <span class="count grow" id="fileCount">올린 파일 없음</span>
+      <button type="button" id="clearBtn" disabled>전체 초기화</button>
+    </div>
+    <table class="files">
+      <thead><tr><th class="w44">#</th><th>파일명</th><th class="num size w90">크기</th><th class="w150">상태</th><th class="w70"></th></tr></thead>
+      <tbody id="fileRows"><tr><td colspan="5" class="empty">아직 올린 파일이 없습니다</td></tr></tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2><span class="num">2</span>검사</h2>
+    <div class="row actions">
+      <div>
+        <label class="chk"><input type="checkbox" id="caseSensitive"> 대소문자 구분</label>
+        <div class="crit">기본값은 대소문자를 구분하지 않고(abc = ABC), 앞뒤 공백을 지운 뒤 비교합니다.<br>
+          찾는 열 제목: <code>ADID (구글 광고 ID / 기기식별값)</code>, <code>date</code> (열 위치·제목 행 위치는 상관없음)</div>
+      </div>
+      <button type="button" class="primary" id="runBtn" disabled>중복 검사</button>
+    </div>
+  </section>
+
+  <section class="panel hidden" id="issuesPanel">
+    <h2>확인이 필요한 파일</h2>
+    <div class="issues" id="issues"></div>
+  </section>
+
+  <section class="panel hidden" id="resultPanel">
+    <h2><span class="num">3</span>결과</h2>
+    <div id="stale" class="stale hidden">파일 목록이나 비교 기준이 바뀌었습니다. 최신 결과를 보려면 [중복 검사]를 다시 누르세요.</div>
+    <div class="stats" id="stats"></div>
+    <div class="row tools">
+      <input type="search" id="search" placeholder="ADID 검색" aria-label="ADID 검색">
+      <select id="sort" aria-label="정렬">
+        <option value="count-desc">중복수 많은 순</option>
+        <option value="count-asc">중복수 적은 순</option>
+        <option value="date-asc">날짜 오래된 순</option>
+        <option value="date-desc">날짜 최신 순</option>
+        <option value="adid-asc">ADID 순</option>
+      </select>
+      <span class="grow"></span>
+      <button type="button" id="exportBtn" disabled>엑셀로 내보내기</button>
+    </div>
+    <div id="resultBody"></div>
+  </section>
+</div>
+
+<script src="../lib/xlsx.full.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

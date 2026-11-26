@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>날짜별 수치 대조</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>날짜별 수치 대조</h1>
+  <p class="sub">진행전 수치에 날짜별 증가량을 누적해 기준 데이터와 비교합니다. 파일은 이 브라우저 안에서만 읽으며 외부로 전송되지 않고, 원본 파일은 수정하지 않습니다.</p>
+
+  <section class="panel">
+    <h2><span class="num">1</span>진행전 수치</h2>
+    <div class="grid4">
+      <div class="field"><label for="baseDate">기준 날짜</label><input type="date" id="baseDate"></div>
+      <div class="field"><label for="preOrder">주문수량</label><input type="number" id="preOrder" step="any" inputmode="decimal" placeholder="예: 150"></div>
+      <div class="field"><label for="preSetting">세팅수량</label><input type="number" id="preSetting" step="any" inputmode="decimal" placeholder="예: 180"></div>
+      <div class="field"><label for="preDone">완료수량</label><input type="number" id="preDone" step="any" inputmode="decimal" placeholder="예: 180"></div>
+    </div>
+    <div class="help">진행전 수치 = 기준 날짜가 <b>시작될 때</b>의 수치입니다. 기준 날짜 <b>당일 증가량부터</b> 누적하고, 기준 날짜 이전 증가량은 계산에서 뺍니다.</div>
+  </section>
+
+  <section class="panel">
+    <h2><span class="num">2</span>파일 올리기</h2>
+    <div class="uploads">
+      <div>
+        <div class="drop" id="dropBase" data-kind="base" tabindex="0" role="button">
+          <div><strong>기준 데이터 .xlsx</strong></div>
+          <div class="hint">날짜 · 소진량 · 주문수량 · 세팅수량 · 완료수량<br>끌어 놓거나 클릭해서 선택 (여러 개 가능)</div>
+        </div>
+        <div class="flist" id="listBase"></div>
+      </div>
+      <div>
+        <div class="drop" id="dropInc" data-kind="inc" tabindex="0" role="button">
+          <div><strong>날짜별 증가량 .xlsx</strong></div>
+          <div class="hint">날짜 · 주문 · 세팅 · 완료 증가량<br>끌어 놓거나 클릭해서 선택 (여러 개 가능)</div>
+        </div>
+        <div class="flist" id="listInc"></div>
+      </div>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx" multiple class="hidden">
+    <div id="addNotice" class="alert err hidden"></div>
+    <div class="help">열 위치·제목 행 위치는 상관없이 <b>열 제목</b>으로 찾습니다. 날짜: <code>날짜·일자·date</code> / 소진량: <code>소진</code> 포함 / 주문·세팅·완료: 각 낱말 포함 (증가량 파일에서는 <code>누적</code>이 들어간 열은 쓰지 않음). 자동으로 못 찾거나 잘못 찾으면 파일 아래 선택 상자에서 직접 고르세요.</div>
+  </section>
+
+  <section class="panel">
+    <div class="row">
+      <button type="button" class="primary" id="runBtn">데이터 비교 시작</button>
+      <button type="button" id="clearBtn">전체 초기화</button>
+      <span class="grow"></span>
+      <button type="button" id="exportBtn" disabled>Excel 다운로드</button>
+    </div>
+    <div id="runMsg" class="alert err hidden"></div>
+  </section>
+
+  <section class="panel hidden" id="resultPanel">
+    <h2><span class="num">3</span>결과</h2>
+    <div class="stats" id="stats"></div>
+    <div id="notes"></div>
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab" role="tab" data-tab="t1" aria-selected="true">수치 대조 결과</button>
+      <button type="button" class="tab" role="tab" data-tab="t2" aria-selected="false">소진량 비교 결과</button>
+    </div>
+    <div class="row tools">
+      <input type="search" id="search" placeholder="날짜 검색 (예: 10-15)" aria-label="날짜 검색">
+      <select id="statusFilter" aria-label="비교 결과 필터">
+        <option value="">비교 결과 전체</option>
+        <option value="ok">일치만</option>
+        <option value="bad">차이만</option>
+        <option value="na">비교 불가만</option>
+      </select>
+      <select id="itemFilter" aria-label="항목 필터">
+        <option value="">항목 전체</option>
+        <option value="order">주문수량</option>
+        <option value="setting">세팅수량</option>
+        <option value="done">완료수량</option>
+      </select>
+    </div>
+    <div id="tableBody"></div>
+  </section>
+</div>
+
+<script src="../lib/xlsx.full.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
